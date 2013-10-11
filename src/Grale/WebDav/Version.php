@@ -8,5 +8,14 @@
  * file that was distributed with this source code.
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
-error_reporting(E_ALL | E_STRICT);
+namespace Grale\WebDav;
+
+/**
+ * Client version information
+ *
+ * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
+ */
+class Version
+{
+    const VERSION = '1.0.0';
+}

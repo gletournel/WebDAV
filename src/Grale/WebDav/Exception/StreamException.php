@@ -8,5 +8,13 @@
  * file that was distributed with this source code.
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
-error_reporting(E_ALL | E_STRICT);
+namespace Grale\WebDav\Exception;
+
+/**
+ *
+ *
+ * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
+ */
+class StreamException extends \RuntimeException
+{
+}
