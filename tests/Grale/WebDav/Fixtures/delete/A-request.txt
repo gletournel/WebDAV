@@ -1,0 +1,2 @@
+DELETE /container/ HTTP/1.1
+Host: www.foo.bar

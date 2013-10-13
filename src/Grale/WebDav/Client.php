@@ -184,7 +184,7 @@ class Client
      * @param string $uri
      * @param string $locktoken
      *
-     * @return bool
+     * @return bool Returns true on success or false on failure
      */
     public function delete($uri, $locktoken = null)
     {
@@ -194,15 +194,14 @@ class Client
             $request->setHeader('If', "(<{$locktoken}>)");
         }
 
-        return $this->doRequest($request);
+        $response = $this->doRequest($request);
     }
 
     /**
      * @param string $uri
      * @param string $locktoken
      *
-     * @return bool
-     * @throws HttpException
+     * @return bool Returns true on success or false on failure
      */
     public function mkcol($uri, $locktoken = null)
     {
@@ -212,43 +211,72 @@ class Client
             $request->setHeader('If', "(<{$locktoken}>)");
         }
 
-        return $this->doRequest($request);
+        $response = $this->doRequest($request);
     }
 
     /**
+     * 
+     * The following options are available:
+     * * <tt>recursive</tt>
+     * * <tt>overwrite</tt>
+     * * <tt>locktoken</tt>
+     * 
      * @param string $uri
      * @param string $dest
-     * @param int    $options (DEPTH_NONE, DEPTH_INFINITY, OVERWRITE, PROPERTY_BEHAVIOR_OMIT, PROPERTY_BEHAVIOR_KEEPALIVE)
-     * @param array  $keepalive
+     * @param array  $options
      *
-     * @return bool
-     * @throws HttpException
+     * @return bool Returns true on success or false on failure
      */
-    public function move($uri, $dest, $options = null, array $keepalive = null)
+    public function move($uri, $dest, array $options = null)
     {
+        $recursive = isset($options['recursive']) ? (bool)$options['recursive'] : false;
+        $overwrite = isset($options['overwrite']) ? (bool)$options['overwrite'] : true;
+
         $request = $this->getHttpClient()->createRequest('MOVE', $uri, array(
-            'Destination' => $dest
+            'Destination' => $dest,
+            'Overwrite'   => $overwrite ? 'T' : 'F',
+            'Depth'       => $recursive ? 'Infinity' : '0'
         ));
 
-        return $this->doRequest($request);
+        // Destination: http://www.foo.bar/othercontainer/
+        // Overwrite: F
+        // If: (<opaquelocktoken:fe184f2e-6eec-41d0-c765-01adc56e6bb4>)
+        //     (<opaquelocktoken:e454f3f3-acdc-452a-56c7-00a5c91e4b77>)
+
+        $response = $this->doRequest($request);
     }
 
     /**
+     * 
+     * The following options are available:
+     * * <tt>recursive</tt>
+     * * <tt>overwrite</tt>
+     * 
      * @param string $uri
-     * @param string $dest
-     * @param int    $options (DEPTH_NONE, DEPTH_INFINITY, OVERWRITE, PROPERTY_BEHAVIOR_OMIT, PROPERTY_BEHAVIOR_KEEPALIVE)
-     * @param array  $keepalive
+     * @param string $dest    The destination path
+     * @param array  $options
      *
-     * @return bool
-     * @throws HttpException
+     * @return bool Returns true on success or false on failure
+     * 
+     * @todo Detect an attempt to copy a resource to itself, and throw an exception
      */
-    public function copy($uri, $dest, $options = null, array $keepalive = null)
+    public function copy($uri, $dest, array $options = null)
     {
+        $recursive = isset($options['recursive']) ? (bool)$options['recursive'] : false;
+        $overwrite = isset($options['overwrite']) ? (bool)$options['overwrite'] : true;
+
         $request = $this->getHttpClient()->createRequest('COPY', $uri, array(
-            'Destination' => $dest
+            'Destination' => $dest,
+            'Overwrite'   => $overwrite ? 'T' : 'F',
+            'Depth'       => $recursive ? 'Infinity' : '0'
         ));
 
-        return $this->doRequest($request);
+        $response = $this->doRequest($request);
+
+        if ($response->getStatusCode() == 207) {
+        }
+
+        return $response->isSuccessful();
     }
 
     /**
