@@ -10,6 +10,7 @@
 
 namespace Grale\WebDav;
 
+use Guzzle\Http\Url;
 use Guzzle\Http\Client as HttpClient;
 use Guzzle\Http\Message\Response as HttpResponse;
 use Guzzle\Http\Message\RequestInterface as HttpRequest;
@@ -125,25 +126,6 @@ class Client
     }
 
     /**
-     * @return array
-     */
-    public function options($uri = null)
-    {
-        $features = array();
-
-        $request  = $this->getHttpClient()->options($uri);
-        $response = $this->doRequest($request);
-
-        if ($response->hasHeader('Dav')) {
-            foreach (explode(',', $response->getHeader('Dav')) as $feat) {
-                $features[] = trim($feat);
-            }
-        }
-
-        return $features;
-    }
-
-    /**
      * @param string $uri
      *
      * @return array
@@ -195,6 +177,9 @@ class Client
         }
 
         $response = $this->doRequest($request);
+
+        // 204 (No Content) is the default success code
+        return $response->getStatusCode() == 204;
     }
 
     /**
@@ -212,15 +197,18 @@ class Client
         }
 
         $response = $this->doRequest($request);
+
+        // 201 (Created) is the default success code
+        return $response->getStatusCode() == 201;
     }
 
     /**
-     * 
+     *
      * The following options are available:
      * * <tt>recursive</tt>
      * * <tt>overwrite</tt>
      * * <tt>locktoken</tt>
-     * 
+     *
      * @param string $uri
      * @param string $dest
      * @param array  $options
@@ -233,31 +221,40 @@ class Client
         $overwrite = isset($options['overwrite']) ? (bool)$options['overwrite'] : true;
 
         $request = $this->getHttpClient()->createRequest('MOVE', $uri, array(
-            'Destination' => $dest,
+            'Destination' => $this->resolveUrl($dest),
             'Overwrite'   => $overwrite ? 'T' : 'F',
             'Depth'       => $recursive ? 'Infinity' : '0'
         ));
 
-        // Destination: http://www.foo.bar/othercontainer/
-        // Overwrite: F
-        // If: (<opaquelocktoken:fe184f2e-6eec-41d0-c765-01adc56e6bb4>)
-        //     (<opaquelocktoken:e454f3f3-acdc-452a-56c7-00a5c91e4b77>)
+        if (isset($options['locktoken'])) {
+            $tokens = is_array($options['locktoken']) ? $options['locktoken'] : array($options['locktoken']);
+
+            foreach ($tokens as &$token) {
+                $token = "(<{$token}>)";
+            }
+
+            $request->setHeader('If', implode(' ', $tokens));
+        }
 
         $response = $this->doRequest($request);
+
+        // Note that if an error occurs with a resource other than the resource
+        // identified in the Request-URI then the response must be a 207 (Multi-Status)
+        return $response->getStatusCode() == 201 || $response->getStatusCode() == 204;
     }
 
     /**
-     * 
+     *
      * The following options are available:
      * * <tt>recursive</tt>
      * * <tt>overwrite</tt>
-     * 
+     *
      * @param string $uri
      * @param string $dest    The destination path
      * @param array  $options
      *
      * @return bool Returns true on success or false on failure
-     * 
+     *
      * @todo Detect an attempt to copy a resource to itself, and throw an exception
      */
     public function copy($uri, $dest, array $options = null)
@@ -266,17 +263,16 @@ class Client
         $overwrite = isset($options['overwrite']) ? (bool)$options['overwrite'] : true;
 
         $request = $this->getHttpClient()->createRequest('COPY', $uri, array(
-            'Destination' => $dest,
+            'Destination' => $this->resolveUrl($dest),
             'Overwrite'   => $overwrite ? 'T' : 'F',
             'Depth'       => $recursive ? 'Infinity' : '0'
         ));
 
         $response = $this->doRequest($request);
 
-        if ($response->getStatusCode() == 207) {
-        }
-
-        return $response->isSuccessful();
+        // Note that if an error in executing the COPY method occurs with a resource other
+        // than the resource identified in the Request-URI, then the response must be a 207 (Multi-Status)
+        return $response->getStatusCode() == 201 || $response->getStatusCode() == 204;
     }
 
     /**
@@ -285,30 +281,43 @@ class Client
      * @param array  $properties
      *
      * @return MultiStatus
-     * @throws HttpException
      */
     public function propfind($uri, $depth = 0, array $properties = array())
     {
         $dom = new \DOMDocument('1.0', 'UTF-8');
-        $root = $dom->createElementNS('DAV:', 'D:propfind');
+        $xPropfind = $dom->createElementNS('DAV:', 'D:propfind');
 
         if (count($properties) == 0) {
-            $prop = $dom->createElement('D:allprop');
+            $xProp = $dom->createElement('D:allprop');
         } else {
-            $prop = $dom->createElement('D:prop');
+            $xProp = $dom->createElement('D:prop');
+            $namespaces = array_flip($this->xmlNamespaces);
+
+            foreach ($properties as $property) {
+                list($prefix,) = explode(':', $property, 2);
+
+                if ($prefix !== null && isset($namespaces[$prefix])) {
+                    $xProp->setAttributeNS('http://www.w3.org/2000/xmlns/', "xmlns:$prefix", $namespaces[$prefix]);
+                    $xPropNode = $dom->createElementNs($namespaces[$prefix], $property);
+                } else {
+                    $xPropNode = $dom->createElement($property);
+                }
+
+                $xProp->appendChild($xPropNode);
+            }
         }
 
-        $dom->appendChild($root)->appendChild($prop);
+        $dom->appendChild($xPropfind)->appendChild($xProp);
         $body = $dom->saveXML();
 
         $request = $this->getHttpClient()->createRequest('PROPFIND', $uri, array(
-            'Depth' => $depth,
-            'Content-Type' => 'application/xml'
+            'Content-Type' => 'Content-Type: text/xml; charset="utf-8"',
+            'Depth' => $depth
         ), $body);
 
         $response = $this->doRequest($request);
 
-        return MultiStatus::parse($this, $response->getBody());
+        return $response->getStatusCode() == 207 ? MultiStatus::parse($this, $response->getBody()) : null;
     }
 
     /**
@@ -353,7 +362,7 @@ class Client
         $body = $dom->saveXML();
 
         $request = $this->getHttpClient()->createRequest('LOCK', $uri, array(
-            'Content-Type' => 'application/xml',
+            'Content-Type' => 'text/xml; charset="utf-8"',
             'Depth'        => '0'
         ), $body);
 
@@ -371,7 +380,7 @@ class Client
             throw new \RuntimeException('Unexpected server response');
         }
 
-        return $response->isSuccessful() ? Lock::parse($this, $response->getBody()) : false;
+        return $response->isSuccessful() ? Lock::parse($this, $response->getBody()) : null;
     }
 
     /**
@@ -379,8 +388,7 @@ class Client
      * @param string $token
      * @param int    $timeout
      *
-     * @return Lock
-     * @throws HttpException
+     * @return Lock Returns the refreshed lock on success, or <tt>null</tt> on failure
      */
     public function refreshLock($uri, $token, $timeout = null)
     {
@@ -393,6 +401,8 @@ class Client
         }
 
         $response = $this->doRequest($request);
+
+        return $response->isSuccessful() ? Lock::parse($this, $response->getBody()) : null;
     }
 
     /**
@@ -400,7 +410,6 @@ class Client
      * @param string $token
      *
      * @return bool Returns true on success or false on failure
-     * @throws HttpException
      */
     public function releaseLock($uri, $token)
     {
@@ -410,21 +419,75 @@ class Client
 
         $response = $this->doRequest($request);
 
-        // OK   204 (No Content)
-        //      409 (Conflict)
-        // KO   400 (Bad Request)
-        //      403 (Forbidden)
+        // 204 (No Content) is the default success code
+        return $response->getStatusCode() == 204;
+    }
 
-        return true;
+    /**
+     * @param string $uri
+     * @return array
+     */
+    public function getAllowedMethods($uri = null)
+    {
+        $methods = array();
+
+        $request  = $this->getHttpClient()->options($uri);
+        $response = $this->doRequest($request);
+
+        if ($response->hasHeader('Allow')) {
+            foreach (explode(',', $response->getHeader('Allow')) as $method) {
+                $methods[] = trim($method);
+            }
+        }
+
+        return $methods;
+    }
+
+    /**
+     * @param string $uri
+     * @return array
+     */
+    public function getCompliance($uri = null)
+    {
+        $classes = array();
+
+        $request  = $this->getHttpClient()->options($uri);
+        $response = $this->doRequest($request);
+
+        if ($response->hasHeader('Dav')) {
+            foreach (explode(',', $response->getHeader('Dav')) as $class) {
+                $classes[] = trim($class);
+            }
+        }
+
+        return $classes;
     }
 
 
 
 
 
+    public function resolveUrl($uri)
+    {
+        // Use absolute URLs as-is
+        if (substr($uri, 0, 4) == 'http') {
+            $url = $uri;
+        } else {
+            $url = Url::factory($this->baseUrl)->combine($uri);
+        }
 
+        return (string)$url;
+    }
 
+    public function getBaseUrl()
+    {
+        return $this->baseUrl;
+    }
 
+    public function setBaseUrl($url)
+    {
+        $this->baseUrl = $url;
+    }
 
     /**
      * Sends a single request to a WebDAV server
@@ -468,7 +531,7 @@ class Client
      */
     public function getLastRequest()
     {
-        return $this->lastRequest;
+        return $this->lastRequest ? (string)$this->lastRequest : null;
     }
 
     /**
@@ -518,6 +581,8 @@ class Client
     public function setUserAgent($userAgent)
     {
         $this->userAgent = $userAgent;
+
+        $this->getHttpClient()->setUserAgent($userAgent);
     }
 
     /**
@@ -560,6 +625,13 @@ class Client
      */
     public function setHttpClient(HttpClient $client)
     {
+        $client->setBaseUrl($this->baseUrl)
+               ->setUserAgent($this->userAgent);
+
+        if ($this->authType) {
+            $client->setDefaultOption('auth', array($this->username, $this->password, $this->authType));
+        }
+
         $this->httpClient = $client;
     }
 

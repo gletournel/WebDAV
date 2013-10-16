@@ -5,8 +5,7 @@ Content-Length: xxxx
 <?xml version="1.0" encoding="utf-8" ?>
 <d:multistatus xmlns:d="DAV:">
   <d:response>
-    <d:href>http://www.foo.bar/othercontainer/R2/</d:href>
+    <d:href>http://www.foo.bar/container/resource3</d:href>
     <d:status>HTTP/1.1 423 Locked</d:status>
-    <d:error><d:lock-token-submitted/></d:error>
   </d:response>
 </d:multistatus>

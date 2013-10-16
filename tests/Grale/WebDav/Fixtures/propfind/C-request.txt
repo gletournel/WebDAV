@@ -1,9 +1,0 @@
-PROPFIND /container/ HTTP/1.1
-Host: www.foo.bar
-Content-Type: text/xml; charset="utf-8"
-Content-Length: xxxx
-
-<?xml version="1.0" encoding="utf-8" ?>
-<propfind xmlns="DAV:">
-  <propname/>
-</propfind>

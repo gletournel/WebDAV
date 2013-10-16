@@ -1,4 +1,0 @@
-COPY /container/ HTTP/1.1
-Host: www.foo.bar
-Destination: http://www.foo.bar/othercontainer/
-Depth: infinity
