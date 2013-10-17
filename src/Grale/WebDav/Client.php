@@ -103,7 +103,7 @@ class Client
     /**
      * @param string $baseUrl
      */
-    public function __construct($baseUrl)
+    public function __construct($baseUrl = '')
     {
         $this->baseUrl   = $baseUrl;
         $this->userAgent = $this->getDefaultUserAgent();
@@ -612,10 +612,13 @@ class Client
 
     /**
      * @param bool $throwExceptions
+     *
+     * @return self
      */
     public function setThrowExceptions($throwExceptions = true)
     {
         $this->throwExceptions = (bool)$throwExceptions;
+        return $this;
     }
 
     /**

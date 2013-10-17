@@ -14,11 +14,19 @@ use Grale\WebDav\Exception\HttpException;
 use Grale\WebDav\Exception\StreamException;
 use Grale\WebDav\Exception\AccessDeniedException;
 use Grale\WebDav\Exception\NoSuchResourceException;
-use Guzzle\Http\EntityBody;
 use Guzzle\Stream\PhpStreamRequestFactory;
+use Guzzle\Http\EntityBody;
+use Guzzle\Http\Url;
 
 /**
  * Stream wrapper
+ *
+ * The following context options are available:
+ *
+ * - <tt>base_url</tt> NOT IN USE!
+ * - <tt>user_agent</tt>
+ * - <tt>curl_options</tt>
+ * - <tt>throw_exceptions</tt>
  *
  * @todo get the base Url from the DAV client
  *
@@ -30,6 +38,11 @@ class StreamWrapper
      * The wrapper name
      */
     const PROTOCOL = 'webdav';
+
+    /**
+     * The wrapper name for WebDAV over HTTPS
+     */
+    const PROTOCOL_SECURE = 'webdavs';
 
     /**
      * @var resource Stream context
@@ -75,29 +88,56 @@ class StreamWrapper
     protected $locktoken;
 
     /**
-     * @var array File status information cache
-     */
-    protected static $statCache;
-
-    /**
      * @var Client WebDAV client used to send requests
      */
     protected static $client;
 
     /**
-     * @param Client $client WebDAV Client to use with the stream wrapper
+     * @var array Default stream context options
+     */
+    protected static $options = array();
+
+    /**
+     * @var array
+     */
+    protected static $protocols = array(
+        self::PROTOCOL        => 'http',
+        self::PROTOCOL_SECURE => 'https'
+    );
+
+    /**
+     * @var array File status information cache
+     */
+    protected static $statCache;
+
+    /**
+     * @param array  $options An associative array of default stream context options
+     * @param Client $client  WebDAV Client to use with the stream wrapper
      *
      * @return bool Returns true on success or false on failure
      * @throws \RuntimeException If a stream wrapper has already been registered
      */
-    public static function register(Client $client)
+    public static function register(array $options = null, Client $client = null)
     {
-        if (in_array(self::PROTOCOL, stream_get_wrappers())) {
-            throw new \RuntimeException("A stream wrapper already exists for the '" . self::PROTOCOL . "' protocol.");
+        $result = true;
+
+        foreach (array_keys(self::$protocols) as $protocol) {
+            if (in_array($protocol, stream_get_wrappers())) {
+                throw new \RuntimeException("A stream wrapper already exists for the '$protocol' protocol.");
+            }
+
+            $result = $result && stream_wrapper_register($protocol, __CLASS__, STREAM_IS_URL);
         }
 
-        if ($result = stream_wrapper_register(self::PROTOCOL, __CLASS__, STREAM_IS_URL)) {
-            self::$client = $client;
+        if ($result) {
+            // @codeCoverageIgnoreStart
+            if ($client === null) {
+                $client = self::getDefaultClient();
+            }
+            // @codeCoverageIgnoreEnd
+
+            self::$options = $options ? array(self::PROTOCOL => $options) : array();
+            self::$client  = $client;
         }
 
         return $result;
@@ -108,7 +148,23 @@ class StreamWrapper
      */
     public static function unregister()
     {
-        return stream_wrapper_unregister(self::PROTOCOL);
+        $result = true;
+
+        foreach (array_keys(self::$protocols) as $protocol) {
+            if (in_array($protocol, stream_get_wrappers())) {
+                $result = $result && stream_wrapper_unregister($protocol);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return Client Returns the default WebDAV Client to use with the stream wrapper
+     */
+    public static function getDefaultClient()
+    {
+        return new Client();
     }
 
     // @codingStandardsIgnoreStart
@@ -126,40 +182,47 @@ class StreamWrapper
      */
     public function stream_open($path, $mode, $options, &$openedPath)
     {
-        $this->parseUrl($path);
+        $result = false;
 
-        $this->target = $this->getTarget($path);
+        try {
+            $url = $this->resolveUrl($path);
 
-        // We don't care about text-mode translation and binary-mode flags
-        $this->mode = $mode = rtrim($mode, 'tb');
+            // We don't care about text-mode translation and binary-mode flags
+            $this->mode = $mode = rtrim($mode, 'tb');
 
-        // TODO: Remember to check if the mode is valid for the path requested!!
+            // TODO: Remember to check if the mode is valid for the path requested!!
 
-        $quiet = ($options & STREAM_REPORT_ERRORS) != STREAM_REPORT_ERRORS;
+            if (strpos($mode, '+')) {
+                throw new \RuntimeException('WebDAV stream wrapper does not allow simultaneous reading and writing.');
+            }
 
-        if (strpos($mode, '+')) {
-            return $this->triggerError('The WebDAV stream wrapper does not allow simultaneous reading and writing.', $quiet);
+            if (!in_array($mode, array('r', 'w', 'a', 'x'))) {
+                throw new \RuntimeException("Mode not supported: {$mode}. Use one 'r', 'w', 'a', or 'x'.");
+            }
+
+            // When using mode 'x', validate if the file exists before attempting to read
+            if ($mode == 'x' && self::$client->exists($url)) {
+                throw new \RuntimeException("{$path} already exists");
+            }
+
+            if ($mode == 'r') {
+                $result = $this->openReadOnly($url);
+            } elseif ($mode == 'a') {
+                $result = $this->openAppendMode($url);
+            } else {
+                $result = $this->openWriteOnly($url);
+            }
+
+        } catch (\Exception $exception) {
+            $result = $this->triggerError($exception, ($options & STREAM_REPORT_ERRORS) != STREAM_REPORT_ERRORS);
         }
 
-        if (!in_array($mode, array('r', 'w', 'a', 'x'))) {
-            return $this->triggerError("Mode not supported: {$mode}. Use one 'r', 'w', 'a', or 'x'.", $quiet);
-        }
+        if ($result) {
+            $this->openedPath = (string)$url;
 
-        // When using mode 'x', validate if the file exists before attempting to read
-        if ($mode == 'x' && self::$client->exists($this->getTarget($path))) {
-            return $this->triggerError("{$path} already exists", $quiet);
-        }
-
-        if ($mode == 'r') {
-            $result = $this->openReadOnly($path);
-        } elseif ($mode == 'a') {
-            $result = $this->openAppendMode($path);
-        } else {
-            $result = $this->openWriteOnly($path);
-        }
-
-        if ($result && (bool)($options & STREAM_USE_PATH)) {
-            $openedPath = $path;
+            if ((bool)($options & STREAM_USE_PATH)) {
+                $openedPath = $this->openedPath;
+            }
         }
 
         return $result;
@@ -177,7 +240,14 @@ class StreamWrapper
      */
     public function stream_read($bytes)
     {
-        return $this->stream->read($bytes);
+        $data = '';
+
+        // Simultaneous reading and writing is not supported
+        if ($this->mode == 'r') {
+            $data = $this->stream->read($bytes);
+        }
+
+        return $data;
     }
 
     /**
@@ -209,20 +279,13 @@ class StreamWrapper
 
         $this->stream->rewind();
 
-        try {
-            $headers = array();
+        $headers = array();
 
-            if (false /* $this->locktoken */) {
-                $headers['If'] = sprintf('(<%s>)', '' /* $this->locktoken */);
-            }
-
-            self::$client->put($this->target, $headers, $this->stream);
-
-        } catch (HttpException $e) {
-            return $this->triggerError($e->getMessage());
+        if ($this->locktoken) {
+            $headers['If'] = sprintf('(<%s>)', $this->locktoken);
         }
 
-        return true;
+        return self::$client->put($this->openedPath, $headers, $this->stream);
     }
 
     /**
@@ -273,15 +336,19 @@ class StreamWrapper
      */
     public function stream_lock($operation)
     {
-        // We don't care about LOCK_NB
-        $operation = $operation & ~LOCK_NB;
-
         $result = false;
 
-        if ($operation == LOCK_UN) {
-            $result = $this->releaseLock();
-        } else {
-            $result = $this->lock($operation == LOCK_SH ? 'shared' : 'exclusive');
+        try {
+            // We don't care about LOCK_NB
+            $operation = $operation & ~LOCK_NB;
+
+            if ($operation == LOCK_UN) {
+                $result = $this->releaseLock();
+            } else {
+                $result = $this->lock($operation == LOCK_SH ? Lock::SHARED : Lock::EXCLUSIVE);
+            }
+        } catch (\Exception $exception) {
+            $result = $this->triggerError($exception);
         }
 
         return $result;
@@ -345,26 +412,22 @@ class StreamWrapper
      */
     public function rename($old, $new)
     {
-        echo PHP_EOL . "rename('$old', '$new')";
+        $result = false;
 
-        // Can retrieve the context options... from rename()
-        $contextOptions = $this->getOptions();
+        try {
+            $source      = $this->resolveUrl($old);
+            $destination = $this->resolveUrl($new);
 
-        // Request
-        // -------
-        // MOVE {$old} HTTP/1.1
-        // Destination: {$new}
-        // If: (<locktoken>)
+            // Can retrieve the context options
+            $contextOptions = $this->getOptions();
 
-        // Response
-        // --------
-        // HTTP Status-Code 201 or 204 == true
-        // false otherwise
+            $result = self::$client->move($source, $destination, array('locktoken' => $this->locktoken));
 
-        // Errors
-        // ------
-        // No such file or directory
+        } catch (\Exception $exception) {
+            $result = $this->triggerError($exception);
+        }
 
+        return $result;
     }
 
     /**
@@ -377,24 +440,21 @@ class StreamWrapper
      */
     public function unlink($path)
     {
-        $this->parseUrl($path);
-
-        // Can retrieve the context options... from unlink()
-        $contextOptions = $this->getOptions();
+        $result = false;
 
         try {
-            self::$client->createLock($this->getTarget($path), 'exclusive', array(
-                'owner' => 'test'
-            ));
+            $url = $this->resolveUrl($path);
 
-            echo self::$client->getLastRequest();
+            // Can retrieve the context options
+            $contextOptions = $this->getOptions();
 
-            self::$client->delete($this->getTarget($path), $this->locktoken);
-        } catch (\Exception $e) {
-            return $this->triggerError($e->getMessage());
+            $result = self::$client->delete($url, $this->locktoken);
+
+        } catch (\Exception $exception) {
+            $result = $this->triggerError($exception);
         }
 
-        return true;
+        return $result;
     }
 
     /**
@@ -409,38 +469,30 @@ class StreamWrapper
      */
     public function mkdir($path, $mode, $options)
     {
-        fprintf(STDOUT, "   mkdir('$path', %o, $options)\n", $mode);
+        $result = false;
 
-        $mode = $mode === null ? 0777 : $mode;
+        try {
+            if ($options & STREAM_MKDIR_RECURSIVE) {
+                throw new \RuntimeException('WebDAV stream wrapper does not allow to create directories recursively');
+            }
 
-        $this->parseUrl($path);
+            $url = $this->resolveUrl($path);
 
-        // Can retrieve the context options... from mkdir()
-        $contextOptions = $this->getOptions();
+            // Can retrieve the context options
+            $contextOptions = $this->getOptions();
 
-        if ($options & STREAM_MKDIR_RECURSIVE) {
+            $result = self::$client->mkcol($url, $this->locktoken);
+
+        } catch (\Exception $exception) {
+            $result = $this->triggerError($exception, ($options & STREAM_REPORT_ERRORS) != STREAM_REPORT_ERRORS);
         }
 
-        $headers = array();
-
-        if ($this->locktoken) {
-            $headers['If'] = sprintf('(<%s>)', $this->locktoken);
-        }
-
-        // Request
-        // -------
-        // MKCOL {$path} HTTP/1.1
-        // If: (<{$locktoken}>)
-
-        // Response
-        // --------
-        // HTTP Status-Code 201 == true
-        // false otherwise
+        return $result;
     }
 
     /**
      * @param string $path    The path to the directory which should be removed
-     * @param int    $options A bitwise mask of values, such as STREAM_MKDIR_RECURSIVE
+     * @param int    $options A bitwise mask of values, such as STREAM_REPORT_ERRORS
      *
      * @return bool Returns true on success or false on failure
      * @link http://www.php.net/manual/en/streamwrapper.rmdir.php
@@ -449,31 +501,22 @@ class StreamWrapper
      */
     public function rmdir($path, $options)
     {
-        echo PHP_EOL . "rmdir('$path', $options)";
+        $result = false;
 
-        $this->parseUrl($path); // resolvePath()
+        try {
+            $url = $this->resolveUrl($path);
 
-        // Can retrieve the context options... from rmdir()
-        $contextOptions = $this->getOptions();
+            // Can retrieve the context options
+            $contextOptions = $this->getOptions();
 
-        $headers = array();
+            // The directory must be empty, and the relevant permissions must permit this
+            $result = self::$client->delete($url, $this->locktoken);
 
-        if ($this->locktoken) {
-            $headers['If'] = sprintf('(<%s>)', $this->locktoken);
+        } catch (\Exception $exception) {
+            $result = $this->triggerError($exception, ($options & STREAM_REPORT_ERRORS) != STREAM_REPORT_ERRORS);
         }
 
-        // The directory must be empty, and the relevant permissions must permit this
-        // see $options & STREAM_MKDIR_RECURSIVE
-
-        // Request
-        // -------
-        // DELETE {$path} HTTP/1.1
-        // If: (<{$locktoken}>)
-
-        // Response
-        // --------
-        // HTTP Status-Code 204 == true
-        // false otherwise
+        return $result;
     }
 
     /**
@@ -487,28 +530,30 @@ class StreamWrapper
      */
     public function dir_opendir($path, $options)
     {
-        $this->parseUrl($path);
-
-        // Reset the cache
-        $this->clearStatCache();
-
-        $this->openedPath = $path;
+        $result = true;
 
         try {
-            $response = self::$client->propfind($this->getTarget(), null, 1);
+            $url = $this->resolveUrl($path);
 
-            $this->iterator = $response->getIterator();
+            // Reset the cache
+            $this->clearStatCache();
 
-        } catch (NoSuchResourceException $e) {
-            return $this->triggerError("No such file or directory: {$path}");
-        } catch (HttpException $e) {
-            return $this->triggerError($e->getMessage());
+            // Can retrieve the context options
+            $contextOptions = $this->getOptions();
+
+            $response = self::$client->propfind($url, 1);
+
+            $this->iterator   = $response->getIterator();
+            $this->openedPath = $url;
+
+        } catch (\Exception $exception) {
+            $result = $this->triggerError($exception);
         }
 
         // Skip the first entry of the PROPFIND request
         $this->iterator->next();
 
-        return true;
+        return $result;
     }
 
     /**
@@ -525,7 +570,8 @@ class StreamWrapper
             $resource = $this->iterator->current()->getResource();
             $result   = $resource->getFilename();
 
-            self::$statCache[$this->getRealPath($resource->getHref())] = $resource->getStat();
+            $url = (string)$this->openedPath->combine($resource->getHref());
+            self::$statCache[$url] = $resource->getStat();
 
             $this->iterator->next();
         }
@@ -575,8 +621,6 @@ class StreamWrapper
      */
     public function url_stat($path, $flags)
     {
-        $this->parseUrl($path);
-
         if (isset(self::$statCache[$path])) {
             return self::$statCache[$path];
         }
@@ -586,7 +630,9 @@ class StreamWrapper
         // self::$client->exists($uri); // HTTP HEAD request
 
         try {
-            $response = self::$client->propfind($this->getTarget($path));
+            $url = $this->resolveUrl($path);
+
+            $response = self::$client->propfind($url);
 
             if ($response->count() > 0) {
                 $result = current($response->getIterator());
@@ -607,48 +653,13 @@ class StreamWrapper
     // @codingStandardsIgnoreEnd
 
     /**
-     * @param string $path
-     */
-    protected function parseUrl($path)
-    {
-    }
-
-    /**
-     * @param string $path
-     * @return string
-     */
-    protected function getTarget($path = null)
-    {
-        if ($path === null) {
-            $path = $this->openedPath;
-        }
-
-        list($scheme, $target) = explode('://', $path, 2);
-
-        // Remove erroneous leading or trailing slashes
-        return trim($target, '/');
-    }
-
-    /**
-     * @param string $uri
-     * @return string
-     */
-    protected function getRealPath($uri)
-    {
-        $baseUrl  = '/webdav';
-        $realPath = str_replace($baseUrl, null, $uri);
-
-        return self::PROTOCOL . '://' . trim($realPath, '/');
-    }
-
-    /**
      * Get the stream context options available to the current stream
      *
      * @return array Returns an array of options
      */
     protected function getOptions()
     {
-        $context = $this->context ?: stream_context_get_default();
+        $context = $this->context ?: stream_context_get_default(self::$options);
         $options = stream_context_get_options($context);
 
         return isset($options[self::PROTOCOL]) ? $options[self::PROTOCOL] : array();
@@ -693,12 +704,12 @@ class StreamWrapper
         $timeout = 3600;
 
         if ($this->locktoken === null) {
-            $result = self::$client->createLock('path', $scope, array(
-                'timeout' => $timeout,
-                'owner'   => 'john'
+            $result = self::$client->createLock($this->openedPath, $scope, array(
+                'owner'   => __CLASS__,
+                'timeout' => $timeout
             ));
         } else {
-            $result = self::$client->refreshLock('path', $this->locktoken, $timeout);
+            $result = self::$client->refreshLock($this->openedPath, $this->locktoken, $timeout);
         }
 
         if ($result !== null) {
@@ -713,7 +724,7 @@ class StreamWrapper
      */
     protected function releaseLock()
     {
-        $result = self::$client->releaseLock('path', $this->locktoken);
+        $result = self::$client->releaseLock($this->openedPath, $this->locktoken);
 
         $this->locktoken = null;
 
@@ -727,14 +738,14 @@ class StreamWrapper
      *
      * @return bool Returns true on success or false on failure
      */
-    protected function openReadOnly($path)
+    protected function openReadOnly($url)
     {
-        $target  = $this->getTarget($path);
-        $request = self::$client->getHttpClient()->get($target);
+        /*
+        $request = self::$client->getHttpClient()->get($url);
         $factory = new PhpStreamRequestFactory();
 
         $this->stream = $factory->fromRequest($request, array(), array('stream_class' => 'Guzzle\Http\EntityBody'));
-
+        */
         return true;
     }
 
@@ -743,14 +754,14 @@ class StreamWrapper
      *
      * @return bool Returns true on success or false on failure
      */
-    protected function openAppendMode($path)
+    protected function openAppendMode($url)
     {
         try {
-            $target   = $this->getTarget($path);
-            $response = self::$client->get($target);
+            $response = self::$client->get($url);
 
             $this->stream = EntityBody::fromString($response->getBody());
             $this->stream->seek(0, SEEK_END);
+
         } catch (HttpException $e) {
             // The resource does not exist, so use a simple write stream
             return $this->openWriteOnly($path);
@@ -764,11 +775,30 @@ class StreamWrapper
      *
      * @return bool Returns true on success or false on failure
      */
-    protected function openWriteOnly($path)
+    protected function openWriteOnly($url)
     {
         $this->stream = new EntityBody(fopen('php://temp', 'r+'));
 
         return true;
+    }
+
+    /**
+     * @param string $path
+     *
+     * @return Url
+     * @throws \InvalidArgumentException
+     */
+    public function resolveUrl($path)
+    {
+        $url = Url::factory($path);
+
+        $protocol = $url->getScheme();
+
+        if (isset(self::$protocols[$protocol])) {
+            $url->setScheme(self::$protocols[$protocol]);
+        }
+
+        return $url;
     }
 
     /**
@@ -788,8 +818,8 @@ class StreamWrapper
     /**
      * Trigger an error
      *
-     * @param string $error Error message for the error to trigger
-     * @param int    $quiet If set to true, then no error or exception occurs
+     * @param \Exception|string $error Error to trigger
+     * @param int               $quiet If set to true, then no error or exception occurs
      *
      * @return bool Returns false
      * @throws StreamException if throw_exceptions is true
@@ -797,10 +827,13 @@ class StreamWrapper
     protected function triggerError($error, $quiet = false)
     {
         if (!$quiet) {
+            $message  = $error instanceof \Exception ? $error->getMessage() : $error;
+            $previous = $error instanceof \Exception ? $error : null;
+
             if ($this->getOption('throw_exceptions')) {
-                throw new StreamException($error);
+                throw new StreamException($message, null, $previous);
             } else {
-                trigger_error($error, E_USER_WARNING);
+                trigger_error($message, E_USER_WARNING);
             }
         }
 

@@ -92,26 +92,4 @@ class LockTest extends \PHPUnit_Framework_TestCase
         $this->lock->setTimeout(3600);
         $this->assertEquals(3600, $this->lock->getTimeout()->getSeconds());
     }
-
-    public function testFromXml()
-    {
-        $str = '<?xml version="1.0" encoding="utf-8" ?>
-    <D:activelock xmlns:D="DAV:">
-      <D:locktype><D:write/></D:locktype>
-      <D:lockscope><D:shared/></D:lockscope>
-      <D:depth>Infinity</D:depth>
-      <D:owner>
-        <D:href>http://www.ics.uci.edu/~ejw/contact.html</D:href>
-      </D:owner>
-      <D:timeout>Second-604800</D:timeout>
-      <D:locktoken>
-        <D:href>opaquelocktoken:e71d4fae-5dec-22d6-fea5-00a0c91e6be4</D:href>
-      </D:locktoken>
-    </D:activelock>';
-
-        $dom = new \DOMDocument();
-        $dom->loadXML($str);
-
-        $lock = Lock::fromXml($dom->documentElement);
-    }
 }
