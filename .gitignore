@@ -4,6 +4,7 @@ vendor/
 build/
 nbproject
 .twgit
+.twgit_features_subject
 .settings
 .externalToolBuilders
 .buildpath
