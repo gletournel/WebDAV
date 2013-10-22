@@ -1,0 +1,25 @@
+source: src/
+destination: doc/api
+extensions: [php]
+exclude: []
+charset: UTF-8
+main: Grale\WebDav\
+title: PHP WebDav Client
+groups: namespaces
+allowedHtml: [b, i, a, ul, ol, li, p, br, var, samp, kbd, tt]
+autocomplete: [classes, constants, functions]
+accessLevels: [public]
+internal: No
+php: Yes
+tree: Yes
+deprecated: Yes
+todo: Yes
+sourceCode: No
+download: No
+report:
+wipeout: No
+quiet: No
+progressbar: No
+colors: No
+updateCheck: No
+debug: No
