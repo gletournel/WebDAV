@@ -1,0 +1,11 @@
+HTTP/1.1 207 Multi-Status
+Content-Type: text/xml; charset="utf-8"
+Content-Length: xxxx
+
+<?xml version="1.0" encoding="utf-8" ?>
+<d:multistatus xmlns:d='DAV:'>
+  <d:response>
+    <d:href>http://www.foo.bar/othercontainer/C2/</d:href>
+    <d:status>HTTP/1.1 423 Locked</d:status>
+  </d:response>
+</d:multistatus>

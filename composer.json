@@ -1,0 +1,31 @@
+{
+    "name": "gletournel/webdav",
+    "description": "A simple PHP WebDAV client and stream wrapper",
+    "keywords": ["PHP","WebDAV","Stream","Wrapper"],
+    "homepage": "https://github.com/gletournel/WebDAV",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Geoffroy Letournel",
+            "email": "geoffroy.letournel@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.0",
+        "guzzle/http": "~3.7.0",
+        "psr/log": "~1.0"
+    },
+    "require-dev": {
+        "apigen/apigen": "2.8.0",
+        "phpmd/phpmd": "1.4.*",
+        "phpunit/phpunit": "~3.7.0",
+        "squizlabs/php_codesniffer": "1.*"
+    },
+    "suggest": {
+        "monolog/monolog": "Adds support for logging HTTP requests and responses"
+    },
+    "autoload": {
+        "psr-0": {"Grale\\WebDav": "src/"}
+    }
+}
