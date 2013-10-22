@@ -1,5 +1,5 @@
 {
-    "name": "gletournel/webdav",
+    "name": "grale/webdav",
     "description": "A simple PHP WebDAV client and stream wrapper",
     "keywords": ["PHP","WebDAV","Stream","Wrapper"],
     "homepage": "https://github.com/gletournel/WebDAV",
@@ -23,7 +23,8 @@
         "squizlabs/php_codesniffer": "1.*"
     },
     "suggest": {
-        "monolog/monolog": "Adds support for logging HTTP requests and responses"
+        "monolog/monolog": "Adds support for logging HTTP requests and responses",
+        "symfony/finder": "Allows you to more easily filter the files that the stream wrapper returns"
     },
     "autoload": {
         "psr-0": {"Grale\\WebDav": "src/"}
