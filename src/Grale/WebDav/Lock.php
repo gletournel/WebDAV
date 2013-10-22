@@ -14,7 +14,7 @@ use Grale\WebDav\Header\DepthHeader;
 use Grale\WebDav\Header\TimeoutHeader;
 
 /**
- *
+ * A lock that applies to a WebDAV resource
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
@@ -29,11 +29,6 @@ class Lock
      * An exclusive lock
      */
     const EXCLUSIVE = 'exclusive';
-
-    /**
-     * A write lock
-     */
-    const WRITE = 'write';
 
     /**
      * @var string The lock type
@@ -66,21 +61,29 @@ class Lock
     protected $timeout;
 
     /**
-     * @param string $scope Exclusive or shared lock
-     * @param string $type  The lock type
+     * @param string $scope The locking mechanism to use ({@link Lock::EXCLUSIVE} or {@link Lock::SHARED} lock)
+     * @param string $type  The lock type (At present, write lock is the only supported type of locking)
+     *
+     * @throws \InvalidArgumentException When the locking mechanism or lock type specified is not supported
      */
-    public function __construct($scope = null, $type = 'write')
+    public function __construct($scope = 'exclusive', $type = 'write')
     {
-        if ($scope === null) {
-            $scope = self::EXCLUSIVE;
+        if ($scope != Lock::EXCLUSIVE && $scope != Lock::SHARED) {
+            throw new \InvalidArgumentException('The locking mechanism specified is not supported');
         }
 
-        $this->type  = $type;
-        $this->scope = $scope;
+        if ($type != 'write') {
+            throw new \InvalidArgumentException('The lock type specified is not supported');
+        }
+
+        $this->type    = $type;
+        $this->scope   = $scope;
+        $this->timeout = TimeoutHeader::getInfinite();
+        $this->depth   = 0;
     }
 
     /**
-     * @return bool
+     * @return bool Returns true if lock is an exclusive lock
      */
     public function isExclusive()
     {
@@ -88,7 +91,7 @@ class Lock
     }
 
     /**
-     * @return bool
+     * @return bool Returns true if lock is a shared lock
      */
     public function isShared()
     {
@@ -96,7 +99,15 @@ class Lock
     }
 
     /**
-     * @return string
+     * @return bool Returns true if the lock must be applied with depth infinity, or false otherwise
+     */
+    public function isDeep()
+    {
+        return $this->depth == DepthHeader::INFINITY;
+    }
+
+    /**
+     * @return string Returns the scope of this lock
      */
     public function getScope()
     {
@@ -104,7 +115,7 @@ class Lock
     }
 
     /**
-     * @return string
+     * @return string Returns the type of this lock
      */
     public function getType()
     {
@@ -112,7 +123,19 @@ class Lock
     }
 
     /**
-     * @param int $depth
+     * @return int Returns the depth of lock
+     * @see isDeep
+     */
+    public function getDepth()
+    {
+        return $this->depth;
+    }
+
+    /**
+     *
+     * Accepted values are zero or {@link Header\DepthHeader::INFINITY}
+     *
+     * @param int $depth The depth of lock
      */
     public function setDepth($depth)
     {
@@ -126,23 +149,7 @@ class Lock
     }
 
     /**
-     * @return int
-     */
-    public function getDepth()
-    {
-        return $this->depth;
-    }
-
-    /**
-     * @param string $owner
-     */
-    public function setOwner($owner)
-    {
-        $this->owner = $owner;
-    }
-
-    /**
-     * @return string
+     * @return string Returns the name (or id) of the lock owner or <tt>null</tt> if no owner is specified
      */
     public function getOwner()
     {
@@ -150,15 +157,15 @@ class Lock
     }
 
     /**
-     * @param string $token
+     * @param string $owner The name (or id) of the lock owner
      */
-    public function setToken($token)
+    public function setOwner($owner)
     {
-        $this->token = $token;
+        $this->owner = $owner;
     }
 
     /**
-     * @return string
+     * @return string Returns the lock token or <tt>null</tt> otherwise
      */
     public function getToken()
     {
@@ -166,7 +173,23 @@ class Lock
     }
 
     /**
-     * @param mixed $timeout
+     * @param string $token The lock token
+     */
+    public function setToken($token)
+    {
+        $this->token = $token;
+    }
+
+    /**
+     * @return int Returns the number of seconds the lock will live until it is expired or -1 otherwise
+     */
+    public function getTimeout()
+    {
+        return $this->timeout->getSeconds();
+    }
+
+    /**
+     * @param string|int|TimeoutHeader $timeout Number of seconds until the lock is expiring
      */
     public function setTimeout($timeout)
     {
@@ -180,23 +203,9 @@ class Lock
     }
 
     /**
-     * @return TimeoutHeader
-     */
-    public function getTimeout()
-    {
-        return $this->timeout;
-    }
-
-    /**
-     * @return string
-     */
-    public function __toString()
-    {
-        return $this->token;
-    }
-
-    /**
      * @return self
+     * @throws \InvalidArgumentException
+     * @todo define exception message
      */
     public static function fromXml(\DOMElement $element)
     {
@@ -207,7 +216,7 @@ class Lock
         $xLockScope = $xpath->query('D:lockscope/*', $element);
 
         if ($xLockType->length == 0 || $xLockScope->length == 0) {
-            throw new \RuntimeException();
+            throw new \InvalidArgumentException();
         }
 
         $result = new self(

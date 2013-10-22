@@ -20,7 +20,7 @@ use Grale\WebDav\PropertyInterface;
 abstract class AbstractProperty implements PropertyInterface
 {
     /**
-     * @var string
+     * @var string The name of this property
      */
     protected $name;
 

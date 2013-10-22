@@ -62,9 +62,7 @@ class Response
      * @param int|array $status
      * @param string    $description An optional response description
      *
-     * @throws \InvalidArgumentException
-     *
-     * @todo defines the exception message
+     * @throws \InvalidArgumentException When status is not a valid argument
      */
     public function __construct($href, $status = null, $description = null)
     {
@@ -77,7 +75,7 @@ class Response
                 $this->addProperties($properties, $statusCode);
             }
         } elseif ($status !== null) {
-            throw new \InvalidArgumentException();
+            throw new \InvalidArgumentException('Status is expected to be an integer or an array');
         }
 
         $this->type = is_int($status) ? self::HREFSTATUS : self::PROPSTATUS;
@@ -120,6 +118,7 @@ class Response
      */
     public function hasResource()
     {
+        return $this->type == self::PROPSTATUS && $this->hasProperties();
     }
 
     /**
@@ -127,9 +126,11 @@ class Response
      */
     public function getResource()
     {
-        // Checking response status == 200
+        $resource = null;
 
-        $resource = new Resource($this->href, $this->getProperties());
+        if ($this->hasResource()) {
+            $resource = new Resource($this->href, $this->getProperties());
+        }
 
         return $resource;
     }
@@ -158,7 +159,7 @@ class Response
      */
     public function getPropertyNames($status = 200)
     {
-        return isset($this->properties[$status]) ? $this->properties[$status]->getNames() : null;
+        return isset($this->properties[$status]) ? $this->properties[$status]->getNames() : array();
     }
 
     /**
@@ -173,12 +174,16 @@ class Response
     /**
      * @param array $properties
      * @param int   $status
+     *
+     * @return self Provides a fluent interface
      */
     public function addProperties(array $properties, $status = 200)
     {
         foreach ($properties as $property) {
             $this->addProperty($property, $status);
         }
+
+        return $this;
     }
 
     /**
@@ -186,12 +191,14 @@ class Response
      * @param int               $status
      *
      * @return self Provides a fluent interface
-     * @todo defines the exceptions
+     * @throws \LogicException when trying to add a property on a {@link HREFSTATUS} response
      */
     public function addProperty(PropertyInterface $property, $status = 200)
     {
         if ($this->type == self::HREFSTATUS) {
-            throw new \Exception();
+            throw new \LogicException(
+                'Cannot add a property to a response which uses a combination of href and status elements'
+            );
         }
 
         if (!isset($this->properties[$status])) {

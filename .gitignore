@@ -1,7 +1,9 @@
 phpunit.xml
+composer.lock
 vendor/
 build/
 nbproject
+.twgit
 .settings
 .externalToolBuilders
 .buildpath

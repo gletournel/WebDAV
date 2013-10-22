@@ -15,12 +15,17 @@ namespace Grale\WebDav\Property;
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
-final class ResourceType extends AbstractProperty
+class ResourceType extends AbstractProperty
 {
     /**
      * The collection resource type
      */
     const COLLECTION = 'collection';
+
+    /**
+     * Element name as described in the WebDAV XML elements definition
+     */
+    const TAGNAME = 'D:resourcetype';
 
     /**
      * @var array A set of resource types representing this property
@@ -32,7 +37,7 @@ final class ResourceType extends AbstractProperty
      */
     public function __construct($type = array())
     {
-        $this->setName('D:resourcetype');
+        $this->setName(self::TAGNAME);
         $this->types = is_array($type) ? $type : array($type);
     }
 

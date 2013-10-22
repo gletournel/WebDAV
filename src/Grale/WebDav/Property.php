@@ -13,20 +13,20 @@ namespace Grale\WebDav;
 use Grale\WebDav\Property\AbstractProperty;
 
 /**
- *
+ * A property of a WebDAV resource
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
 class Property extends AbstractProperty
 {
     /**
-     * @var mixed
+     * @var mixed The value of this property
      */
     protected $value;
 
     /**
-     * @param string|array $name
-     * @param mixed        $value
+     * @param string|array $name  The name of this property
+     * @param mixed        $value The value of this property
      */
     public function __construct($name, $value = null)
     {
@@ -35,7 +35,7 @@ class Property extends AbstractProperty
     }
 
     /**
-     * @return mixed
+     * @inheritdoc
      */
     public function getValue()
     {
@@ -43,7 +43,7 @@ class Property extends AbstractProperty
     }
 
     /**
-     * @return self
+     * @inheritdoc
      */
     public static function fromXml(\DOMElement $element, array $xmlNamespaces = array())
     {

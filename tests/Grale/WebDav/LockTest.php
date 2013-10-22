@@ -10,8 +10,12 @@
 
 namespace Grale\WebDav;
 
+use Grale\WebDav\Header\TimeoutHeader;
 use Grale\WebDav\Header\DepthHeader;
 
+/**
+ * @covers Grale\WebDav\Lock
+ */
 class LockTest extends \PHPUnit_Framework_TestCase
 {
     protected $lock;
@@ -21,6 +25,13 @@ class LockTest extends \PHPUnit_Framework_TestCase
         $this->lock = new Lock();
     }
 
+    public function testSharedLock()
+    {
+        $lock = new Lock('shared');
+        $this->assertEquals('shared', $lock->getScope());
+        $this->assertTrue($lock->isShared());
+    }
+
     public function testType()
     {
         $this->assertEquals('write', $this->lock->getType());
@@ -28,31 +39,8 @@ class LockTest extends \PHPUnit_Framework_TestCase
 
     public function testDefaultScope()
     {
-        $this->assertEquals(Lock::EXCLUSIVE, $this->lock->getScope());
-    }
-
-    public function testSharedLock()
-    {
-        $lock = new Lock(Lock::SHARED);
-        $this->assertEquals(Lock::SHARED, $lock->getScope());
-    }
-
-    public function testIsSharedLock()
-    {
-        $lock = new Lock(Lock::SHARED);
-        $this->assertTrue($lock->isShared());
-    }
-
-    public function testExclusiveLock()
-    {
-        $lock = new Lock(Lock::EXCLUSIVE);
-        $this->assertEquals(Lock::EXCLUSIVE, $lock->getScope());
-    }
-
-    public function testIsExclusiveLock()
-    {
-        $lock = new Lock(Lock::EXCLUSIVE);
-        $this->assertTrue($lock->isExclusive());
+        $this->assertEquals('exclusive', $this->lock->getScope());
+        $this->assertTrue($this->lock->isExclusive());
     }
 
     public function testDefaultDepth()
@@ -64,6 +52,7 @@ class LockTest extends \PHPUnit_Framework_TestCase
     {
         $this->lock->setDepth(DepthHeader::INFINITY);
         $this->assertEquals(DepthHeader::INFINITY, $this->lock->getDepth());
+        $this->assertTrue($this->lock->isDeep());
     }
 
     /**
@@ -90,6 +79,92 @@ class LockTest extends \PHPUnit_Framework_TestCase
     public function testTimeout()
     {
         $this->lock->setTimeout(3600);
-        $this->assertEquals(3600, $this->lock->getTimeout()->getSeconds());
+        $this->assertEquals(3600, $this->lock->getTimeout());
+    }
+
+    public function testSetTimeoutAsObject()
+    {
+        $this->lock->setTimeout(TimeoutHeader::getInfinite());
+        $this->assertEquals(TimeoutHeader::INFINITE, $this->lock->getTimeout());
+    }
+
+    /**
+     * @expectedException \InvalidArgumentException
+     * @expectedExceptionMessage The lock type specified is not supported
+     */
+    public function testInvalidLockType()
+    {
+        new Lock('exclusive', 'read');
+    }
+
+    /**
+     * @expectedException \InvalidArgumentException
+     * @expectedExceptionMessage The locking mechanism specified is not supported
+     */
+    public function testInvalidLockScope()
+    {
+        new Lock('advisory');
+    }
+
+    /**
+     * @expectedException \InvalidArgumentException
+     * @expectedExceptionMessage
+     */
+    public function testFromInvalidXml()
+    {
+        $dom = new \DOMDocument();
+        $dom->loadXML('<?xml version="1.0" encoding="utf-8"?><element/>');
+        Lock::fromXml($dom->documentElement);
+    }
+
+    public function testFromActiveLockXml()
+    {
+        $dom = new \DOMDocument();
+        $dom->loadXML(
+            '<?xml version="1.0" encoding="utf-8"?>
+            <D:activelock xmlns:D="DAV:">
+              <D:locktype><D:write/></D:locktype>
+              <D:lockscope><D:exclusive/></D:lockscope>
+              <D:depth>Infinity</D:depth>
+              <D:owner>
+                <D:href>http://example.org/~ejw/contact.html</D:href>
+              </D:owner>
+              <D:timeout>Second-604800</D:timeout>
+              <D:locktoken>
+                <D:href>urn:uuid:e71d4fae-5dec-22d6-fea5-00a0c91e6be4</D:href>
+              </D:locktoken>
+              <D:lockroot>
+                <D:href>http://example.com/workspace/webdav/proposal.doc</D:href>
+              </D:lockroot>
+            </D:activelock>'
+        );
+        $lock = Lock::fromXml($dom->documentElement);
+
+        $this->assertEquals('write', $lock->getType());
+        $this->assertEquals('exclusive', $lock->getScope());
+        $this->assertEquals(DepthHeader::INFINITY, $lock->getDepth());
+        $this->assertEquals('http://example.org/~ejw/contact.html', $lock->getOwner());
+        $this->assertEquals(604800, $lock->getTimeout());
+        $this->assertEquals('urn:uuid:e71d4fae-5dec-22d6-fea5-00a0c91e6be4', $lock->getToken());
+    }
+
+    public function testFromLockInfoXml()
+    {
+        $dom = new \DOMDocument();
+        $dom->loadXML(
+            '<?xml version="1.0" encoding="utf-8"?>
+            <D:lockinfo xmlns:D="DAV:">
+              <D:locktype><D:write/></D:locktype>
+              <D:lockscope><D:exclusive/></D:lockscope>
+              <D:owner>
+                <D:href>http://example.org/~ejw/contact.html</D:href>
+              </D:owner>
+            </D:lockinfo>'
+        );
+        $lock = Lock::fromXml($dom->documentElement);
+        $this->assertEquals('write', $lock->getType());
+        $this->assertEquals('exclusive', $lock->getScope());
+        $this->assertEquals('http://example.org/~ejw/contact.html', $lock->getOwner());
+        $this->assertEmpty($lock->getToken());
     }
 }

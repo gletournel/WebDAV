@@ -11,10 +11,12 @@
 namespace Grale\WebDav;
 
 use Guzzle\Http\Url;
+use Guzzle\Http\EntityBody;
 use Guzzle\Http\Client as HttpClient;
 use Guzzle\Http\Message\Response as HttpResponse;
 use Guzzle\Http\Message\RequestInterface as HttpRequest;
 use Guzzle\Http\Exception\BadResponseException;
+use Guzzle\Stream\PhpStreamRequestFactory;
 use Grale\WebDav\Exception\NoSuchResourceException;
 use Grale\WebDav\Exception\AccessDeniedException;
 use Grale\WebDav\Exception\HttpException;
@@ -46,22 +48,12 @@ class Client
     protected $lastResponse;
 
     /**
-     * @var string
+     * @var string The request options
      */
-    protected $username;
+    protected $requestOptions;
 
     /**
-     * @var string
-     */
-    protected $password;
-
-    /**
-     * @var string The HTTP authentication method to use
-     */
-    protected $authType;
-
-    /**
-     * @var string
+     * @var string The base URL of the client
      */
     protected $baseUrl;
 
@@ -71,7 +63,7 @@ class Client
     protected $userAgent;
 
     /**
-     * @var bool Wether or not exceptions should be thrown when a HTTP error is returned
+     * @var bool Whether or not exceptions should be thrown when a HTTP error is returned
      */
     protected $throwExceptions = false;
 
@@ -101,13 +93,12 @@ class Client
     public $propertyMap = array();
 
     /**
-     * @param string $baseUrl
+     * @param string $baseUrl The base URL of the client
+     * @param array  $config  Configuration settings
+     * @see setConfig
      */
-    public function __construct($baseUrl = '')
+    public function __construct($baseUrl = '', array $config = null)
     {
-        $this->baseUrl   = $baseUrl;
-        $this->userAgent = $this->getDefaultUserAgent();
-
         $this->propertyMap = array(
             'resourcetype'    => __NAMESPACE__ . '\\Property\\ResourceType',
             'creationdate'    => __NAMESPACE__ . '\\Property\\DateTimeProperty',
@@ -115,85 +106,82 @@ class Client
             'lockdiscovery'   => __NAMESPACE__ . '\\Property\\LockDiscovery',
             'supportedlock'   => __NAMESPACE__ . '\\Property\\SupportedLock'
         );
+
+        $this->setBaseUrl($baseUrl);
+        $this->userAgent = $this->getDefaultUserAgent();
+        $this->requestOptions = array();
+
+        if ($config !== null) {
+            $this->setConfig($config);
+        }
     }
 
     /**
-     * @return bool
-     */
-    public function exists($uri = null)
-    {
-        return false;
-    }
-
-    /**
-     * @param string $uri
+     * Get the content of the specified resource.
      *
-     * @return array
-     */
-    public function head($uri)
-    {
-        $request  = $this->getHttpClient()->head($uri);
-        $response = $this->doRequest($request);
-
-        return $response;
-    }
-
-    /**
-     * @param string $uri
-     *
-     * @return string
+     * @param string $uri Resource URI
+     * @return string Returns the contents of this resource or <tt>null</tt> on failure
      */
     public function get($uri)
     {
-        $request = $this->getHttpClient()->get($uri);
-        return $this->doRequest($request);
-    }
-
-    /**
-     * @param string          $uri
-     * @param array           $headers
-     * @param string|resource $body
-     *
-     * @return bool
-     */
-    public function put($uri, array $headers = null, $body = null)
-    {
-        $request = $this->getHttpClient()->put($uri, $headers, $body);
-        return $this->doRequest($request);
-    }
-
-    /**
-     * @param string $uri
-     * @param string $locktoken
-     *
-     * @return bool Returns true on success or false on failure
-     */
-    public function delete($uri, $locktoken = null)
-    {
-        $request = $this->getHttpClient()->delete($uri);
-
-        if ($locktoken) {
-            $request->setHeader('If', "(<{$locktoken}>)");
-        }
-
+        $request  = $this->createRequest('GET', $uri);
         $response = $this->doRequest($request);
 
-        // 204 (No Content) is the default success code
-        return $response->getStatusCode() == 204;
+        return $response->isSuccessful() ? $response->getBody(true) : null;
     }
 
     /**
-     * @param string $uri
-     * @param string $locktoken
+     * get the streaming contents of the specified resource.
+     *
+     * @param string $uri Resource URI
+     *
+     * @return EntityBody
+     * @throws \RuntimeException If the stream cannot be opened or an error occurs
+     */
+    public function getStream($uri)
+    {
+        $request = $this->createRequest('GET', $uri);
+        $factory = new PhpStreamRequestFactory();
+        return $factory->fromRequest($request, array(), array('stream_class' => 'Guzzle\Http\EntityBody'));
+    }
+
+    /**
+     * Check whether the specified resource exists.
+     *
+     * @param string $uri Resource URI
+     * @return bool Returns true if this resource represents an existing item or false otherwise
+     */
+    public function exists($uri)
+    {
+        $request  = $this->createRequest('HEAD', $uri);
+        $response = $this->doRequest($request);
+
+        return $response->getStatusCode() == 200;
+    }
+
+    /**
+     * Write data to the specified resource.
+     *
+     * Performs a <tt>PUT</tt> request following the requirements described in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.7 Section 9.7 of RFC-4918}.
+     *
+     * The following options are available:
+     * - <tt>headers</tt>, an associative array of HTTP headers
+     * - <tt>locktoken</tt>
+     *
+     * @param string          $uri     Resource URI
+     * @param string|resource $body    Data to write
+     * @param array           $options Options to apply to the request
      *
      * @return bool Returns true on success or false on failure
      */
-    public function mkcol($uri, $locktoken = null)
+    public function put($uri, $body = null, array $options = null)
     {
-        $request = $this->getHttpClient()->createRequest('MKCOL', $uri);
+        $headers = isset($options['headers']) ? $options['headers'] : array();
+        $request = $this->createRequest('PUT', $uri, $headers, $body);
 
-        if ($locktoken) {
-            $request->setHeader('If', "(<{$locktoken}>)");
+        if (isset($options['locktoken'])) {
+            $request->setHeader('If', '(<' . $options['locktoken'] . '>)');
         }
 
         $response = $this->doRequest($request);
@@ -203,25 +191,89 @@ class Client
     }
 
     /**
+     * Delete the specified resource.
+     *
+     * Performs a <tt>DELETE</tt> request following the requirements described in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.6 Section 9.6 of RFC-4918}.
      *
      * The following options are available:
-     * * <tt>recursive</tt>
-     * * <tt>overwrite</tt>
-     * * <tt>locktoken</tt>
+     * - <tt>headers</tt>, an associative array of HTTP headers
+     * - <tt>locktoken</tt>
      *
-     * @param string $uri
-     * @param string $dest
-     * @param array  $options
+     * @param string $uri     Resource URI
+     * @param array  $options Options to apply to the request
      *
      * @return bool Returns true on success or false on failure
      */
-    public function move($uri, $dest, array $options = null)
+    public function delete($uri, array $options = null)
+    {
+        $headers = isset($options['headers']) ? $options['headers'] : array();
+        $request = $this->createRequest('DELETE', $uri, $headers);
+
+        if (isset($options['locktoken'])) {
+            $request->setHeader('If', '(<' . $options['locktoken'] . '>)');
+        }
+
+        $response = $this->doRequest($request);
+
+        // 204 (No Content) is the default success code
+        return $response->getStatusCode() == 204;
+    }
+
+    /**
+     * Create a new collection resource at the location specified.
+     *
+     * Performs a <tt>MKCOL</tt> request as defined in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.3 Section 9.3 of RFC-4918}.
+     *
+     * The following options are available:
+     * - <tt>headers</tt>, an associative array of HTTP headers
+     * - <tt>locktoken</tt>
+     *
+     * @param string $uri     Resource URI
+     * @param array  $options Options to apply to the request
+     *
+     * @return bool Returns true on success or false on failure
+     */
+    public function mkcol($uri, array $options = null)
+    {
+        $headers = isset($options['headers']) ? $options['headers'] : array();
+        $request = $this->createRequest('MKCOL', $uri, $headers);
+
+        if (isset($options['locktoken'])) {
+            $request->setHeader('If', '(<' . $options['locktoken'] . '>)');
+        }
+
+        $response = $this->doRequest($request);
+
+        // 201 (Created) is the default success code
+        return $response->getStatusCode() == 201;
+    }
+
+    /**
+     * Move the specified resource to the given destination resource.
+     *
+     * Performs a <tt>MOVE</tt> request as defined in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.9 Section 9.9 of RFC-4918}.
+     *
+     * The following options are available:
+     * - <tt>recursive</tt>
+     * - <tt>overwrite</tt>
+     * - <tt>locktoken</tt>
+     *
+     * @param string $uri         Resource URI
+     * @param string $destination URI of the destination resource
+     * @param array  $options     Options to apply to the request
+     *
+     * @return bool Returns true on success or false on failure
+     */
+    public function move($uri, $destination, array $options = null)
     {
         $recursive = isset($options['recursive']) ? (bool)$options['recursive'] : false;
         $overwrite = isset($options['overwrite']) ? (bool)$options['overwrite'] : true;
 
-        $request = $this->getHttpClient()->createRequest('MOVE', $uri, array(
-            'Destination' => $this->resolveUrl($dest),
+        $request = $this->createRequest('MOVE', $uri, array(
+            'Destination' => $this->resolveUrl($destination),
             'Overwrite'   => $overwrite ? 'T' : 'F',
             'Depth'       => $recursive ? 'Infinity' : '0'
         ));
@@ -244,26 +296,30 @@ class Client
     }
 
     /**
+     * Copy the specified resource to the given destination resource.
+     *
+     * Performs a <tt>COPY</tt> request as defined in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.8 Section 9.8 of RFC-4918}.
      *
      * The following options are available:
-     * * <tt>recursive</tt>
-     * * <tt>overwrite</tt>
+     * - <tt>recursive</tt>
+     * - <tt>overwrite</tt>
      *
-     * @param string $uri
-     * @param string $dest    The destination path
-     * @param array  $options
+     * @param string $uri         Resource URI
+     * @param string $destination URI of the destination resource
+     * @param array  $options     Options to apply to the request
      *
      * @return bool Returns true on success or false on failure
      *
      * @todo Detect an attempt to copy a resource to itself, and throw an exception
      */
-    public function copy($uri, $dest, array $options = null)
+    public function copy($uri, $destination, array $options = null)
     {
         $recursive = isset($options['recursive']) ? (bool)$options['recursive'] : false;
         $overwrite = isset($options['overwrite']) ? (bool)$options['overwrite'] : true;
 
-        $request = $this->getHttpClient()->createRequest('COPY', $uri, array(
-            'Destination' => $this->resolveUrl($dest),
+        $request = $this->createRequest('COPY', $uri, array(
+            'Destination' => $this->resolveUrl($destination),
             'Overwrite'   => $overwrite ? 'T' : 'F',
             'Depth'       => $recursive ? 'Infinity' : '0'
         ));
@@ -276,14 +332,25 @@ class Client
     }
 
     /**
-     * @param string $uri
-     * @param int    $depth
-     * @param array  $properties
+     * Retrieve properties defined on the specified resource.
+     *
+     * Performs a <tt>PROPFIND</tt> request as defined in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.1 Section 9.1 of RFC-4918}.
+     *
+     * The following options are available:
+     * - <tt>properties</tt>
+     * - <tt>depth</tt>
+     *
+     * @param string $uri     Resource URI
+     * @param array  $options Options to apply to the request
      *
      * @return MultiStatus
      */
-    public function propfind($uri, $depth = 0, array $properties = array())
+    public function propfind($uri, array $options = null)
     {
+        $depth      = isset($options['depth']) ? (int)$options['depth'] : 0;
+        $properties = isset($options['properties']) ? $options['properties'] : array();
+
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $xPropfind = $dom->createElementNS('DAV:', 'D:propfind');
 
@@ -310,7 +377,7 @@ class Client
         $dom->appendChild($xPropfind)->appendChild($xProp);
         $body = $dom->saveXML();
 
-        $request = $this->getHttpClient()->createRequest('PROPFIND', $uri, array(
+        $request = $this->createRequest('PROPFIND', $uri, array(
             'Content-Type' => 'Content-Type: text/xml; charset="utf-8"',
             'Depth' => $depth
         ), $body);
@@ -321,17 +388,19 @@ class Client
     }
 
     /**
+     * Create a new lock for the given resource.
+     *
+     * Performs a <tt>LOCK</tt> request as defined in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.10.1 Section 9.10.1 of RFC-4918}.
      *
      * Available options:
-     * * <tt>timeout</tt>
-     * * <tt>owner</tt>
+     * - <tt>type</tt>, the lock type. Note that only write locks are supported.
+     * - <tt>scope</tt>, the locking mechanism to use ({@link Lock::EXCLUSIVE} or {@link Lock::SHARED} lock).
+     * - <tt>timeout</tt>
+     * - <tt>owner</tt>
      *
-     * Note that the <tt>depth</tt> option is unused.
-     * Note also that only write locks are supported.
-     *
-     * @param string $uri
-     * @param string $scope   The locking mechanism to use ({@link Lock::EXCLUSIVE} or {@link Lock::SHARED} lock)
-     * @param array  $options The locking options
+     * @param string $uri     Resource URI
+     * @param array  $options Locking options
      *
      * @return Lock Returns the created lock on success, or <tt>null</tt> on failure
      *
@@ -341,8 +410,10 @@ class Client
      *         When the server returns an unexpected response. Actually, 207 (Multi-Status) responses are not supposed
      *         to be received from server, as far as multi-resource lock requests are not supported.
      */
-    public function createLock($uri, $scope, array $options = null)
+    public function createLock($uri, array $options = null)
     {
+        $scope = isset($options['scope']) ? $options['scope'] : Lock::EXCLUSIVE;
+
         if ($scope != Lock::EXCLUSIVE && $scope != Lock::SHARED) {
             throw new \InvalidArgumentException('The locking mechanism specified is not supported');
         }
@@ -361,15 +432,16 @@ class Client
         $dom->appendChild($root);
         $body = $dom->saveXML();
 
-        $request = $this->getHttpClient()->createRequest('LOCK', $uri, array(
+        $headers = array(
             'Content-Type' => 'text/xml; charset="utf-8"',
             'Depth'        => '0'
-        ), $body);
+        );
 
         if (isset($options['timeout'])) {
-            $request->setHeader('Timeout', (string)TimeoutHeader::parse($options['timeout']));
+            $headers['Timeout'] = (string)TimeoutHeader::parse($options['timeout']);
         }
 
+        $request  = $this->createRequest('LOCK', $uri, $headers, $body);
         $response = $this->doRequest($request);
 
         // When the LOCK request succeeds, the lockdiscovery property is included in the response body.
@@ -384,39 +456,54 @@ class Client
     }
 
     /**
-     * @param string $uri
-     * @param string $token
-     * @param int    $timeout
+     * Refresh an existing lock by resetting its timeout.
+     *
+     * Performs a <tt>LOCK</tt> request as defined in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.10.2 Section 9.10.2 of RFC-4918}.
+     *
+     * Note that the timeout value may be suggested when refreshing the lock, but that the server
+     * ultimately chooses the timeout value.
+     *
+     * @param string $uri       Resource URI
+     * @param string $lockToken The lock token identifying the lock to be refreshed
+     * @param int    $timeout   Number of seconds remaining until lock expiration
      *
      * @return Lock Returns the refreshed lock on success, or <tt>null</tt> on failure
      */
-    public function refreshLock($uri, $token, $timeout = null)
+    public function refreshLock($uri, $lockToken, $timeout = null)
     {
-        $request = $this->getHttpClient()->createRequest('LOCK', $uri, array(
-            'If' => "(<{$token}>)"
-        ));
+        $headers = array(
+            'If' => "(<{$lockToken}>)"
+        );
 
         if ($timeout) {
-            $request->setHeader('Timeout', (string)TimeoutHeader::parse($timeout));
+            $headers['Timeout'] = (string)TimeoutHeader::parse($timeout);
         }
 
+        $request  = $this->createRequest('LOCK', $uri, $headers);
         $response = $this->doRequest($request);
 
         return $response->isSuccessful() ? Lock::parse($this, $response->getBody()) : null;
     }
 
     /**
-     * @param string $uri
-     * @param string $token
+     * Release the lock identified by the given lock token.
      *
-     * @return bool Returns true on success or false on failure
+     * Performs an <tt>UNLOCK</tt> request as defined in the
+     * {@link http://tools.ietf.org/html/rfc4918#section-9.11 Section 9.11 of RFC-4918}.
+     *
+     * @param string $uri       Resource URI
+     * @param string $lockToken The lock token identifying the lock to be removed
+     *
+     * @return bool Returns true on success or false if the lock could not be removed
      */
-    public function releaseLock($uri, $token)
+    public function releaseLock($uri, $lockToken)
     {
-        $request = $this->getHttpClient()->createRequest('UNLOCK', $uri, array(
-            'Lock-Token' => "<{$token}>"
-        ));
+        $headers = array(
+            'Lock-Token' => "<{$lockToken}>"
+        );
 
+        $request  = $this->createRequest('UNLOCK', $uri, $headers);
         $response = $this->doRequest($request);
 
         // 204 (No Content) is the default success code
@@ -424,14 +511,16 @@ class Client
     }
 
     /**
-     * @param string $uri
-     * @return array
+     * Returns a list of all HTTP methods supported by the given resource.
+     *
+     * @param string $uri Resource URI
+     * @return array Methods supported by this resource
      */
-    public function getAllowedMethods($uri = null)
+    public function getSupportedMethods($uri = null)
     {
         $methods = array();
 
-        $request  = $this->getHttpClient()->options($uri);
+        $request  = $this->createRequest('OPTIONS', $uri);
         $response = $this->doRequest($request);
 
         if ($response->hasHeader('Allow')) {
@@ -444,14 +533,16 @@ class Client
     }
 
     /**
-     * @param string $uri
-     * @return array
+     * Returns a list of all compliance classes the given resource is fulfilling.
+     *
+     * @param string $uri Resource URI
+     * @return array Compliance classes
      */
-    public function getCompliance($uri = null)
+    public function getComplianceClasses($uri = null)
     {
         $classes = array();
 
-        $request  = $this->getHttpClient()->options($uri);
+        $request  = $this->createRequest('OPTIONS', $uri);
         $response = $this->doRequest($request);
 
         if ($response->hasHeader('Dav')) {
@@ -463,11 +554,13 @@ class Client
         return $classes;
     }
 
-
-
-
-
-    public function resolveUrl($uri)
+    /**
+     * Combine the given resource URI with the base URL of the client.
+     *
+     * @param string $uri Resource URI
+     * @return string
+     */
+    protected function resolveUrl($uri)
     {
         // Use absolute URLs as-is
         if (substr($uri, 0, 4) == 'http') {
@@ -477,16 +570,6 @@ class Client
         }
 
         return (string)$url;
-    }
-
-    public function getBaseUrl()
-    {
-        return $this->baseUrl;
-    }
-
-    public function setBaseUrl($url)
-    {
-        $this->baseUrl = $url;
     }
 
     /**
@@ -527,6 +610,38 @@ class Client
     }
 
     /**
+     * Create a new request configured for the client.
+     *
+     * @param string          $method  HTTP method
+     * @param string          $uri     Resource URI
+     * @param array           $headers HTTP headers
+     * @param string|resource $body    Entity body of request
+     *
+     * @return HttpRequest Returns the created request
+     */
+    protected function createRequest($method, $uri, array $headers = null, $body = null)
+    {
+        $url = $this->resolveUrl($uri);
+
+        $request = $this->getHttpClient()->createRequest($method, $url, $headers, $body, $this->requestOptions);
+        $request->setHeader('User-Agent', $this->userAgent);
+
+        return $request;
+    }
+
+    /**
+     * Register the WebDAV stream wrapper.
+     *
+     * @return bool Returns true on success or false on failure
+     * @throws \RuntimeException If a stream wrapper has already been registered
+     */
+    public function registerStreamWrapper()
+    {
+        return StreamWrapper::register($this->getConfig(), $this);
+    }
+
+    /**
+     * Get the last sent request.
      * @return string Returns the content of the last sent request
      */
     public function getLastRequest()
@@ -535,7 +650,8 @@ class Client
     }
 
     /**
-     * @return string Returns the content of the last received response
+     * Get the last received response.
+     * @return string Returns the body of the last received response
      */
     public function getLastResponse()
     {
@@ -543,7 +659,8 @@ class Client
     }
 
     /**
-     * @return array Returns the content of the last received response
+     * Get the list of headers received in the last response.
+     * @return array Returns the headers of the last received response
      */
     public function getLastResponseHeaders()
     {
@@ -551,6 +668,7 @@ class Client
     }
 
     /**
+     * Get the status-code of the last received response.
      * @return int Returns The HTTP status-code of the last received response
      */
     public function getLastResponseStatus()
@@ -559,16 +677,8 @@ class Client
     }
 
     /**
-     * @return bool Returns true on success or false on failure
-     * @throws \RuntimeException If a stream wrapper has already been registered
-     */
-    public function registerStreamWrapper()
-    {
-        return StreamWrapper::register($this);
-    }
-
-    /**
-     * @return string
+     * Get the default User-Agent string to use with the client.
+     * @return string Returns a string identifying the client version
      */
     public function getDefaultUserAgent()
     {
@@ -576,44 +686,133 @@ class Client
     }
 
     /**
-     * @param string $userAgent
+     * Get the base URL of the client.
+     * @return string The base URL
+     */
+    public function getBaseUrl()
+    {
+        return $this->baseUrl;
+    }
+
+    /**
+     * Set the base URL of the client.
+     *
+     * @param string $url The base URL
+     * @return self Provides a fluent interface
+     */
+    public function setBaseUrl($url)
+    {
+        $this->baseUrl = $url;
+        return $this;
+    }
+
+    /**
+     * Set the client configuration.
+     *
+     * The client supports the following parameters:
+     * - <tt>auth</tt>              — the HTTP authorization parameters. Set to false to disable authentication
+     *                                or pass an array containing user name, password and authentication scheme
+     *                                as required by {@link setAuth}.
+     *
+     * - <tt>base_url</tt>          — the base URL of the client.
+     *
+     * - <tt>user_agent</tt>        — the user-agent string to use in HTTP requests.
+     *
+     * - <tt>ssl_verify</tt>        — set to false to stop from verifying the peer's certificate or to the path
+     *                                of a file holding one or more certificates to verify the peer with.
+     *
+     * - <tt>ssl_key</tt>           — path to a file containing a private SSL key, or false to disable the SSL
+     *                                private key. If a secret password is needed to use the private SSL key,
+     *                                use an array containing the path to key followed by the secret password.
+     *
+     * - <tt>ssl_certificate</tt>   — path to a file containing a PEM formatted certificate, or false to disable
+     *                                the SSL certificate. If a password is required with the certificate, use
+     *                                an array containing the path to certification followed by its password.
+     *
+     * - <tt>throw_exceptions</tt>  — a boolean value indicating whether or not exceptions should be thrown when
+     *                                an HTTP error is returned.
+     *
+     * @param array $config Parameters that define how the client behaves
+     * @return self Provides a fluent interface
+     */
+    public function setConfig(array $config)
+    {
+        if (isset($config['auth'])) {
+            $params = is_array($config['auth']) ? $config['auth'] : array($config['auth']);
+            call_user_func_array(array($this, 'setAuth'), $params);
+        }
+
+        foreach ($config as $key => $value) {
+            switch ($key) {
+                case 'base_url':
+                    $this->setBaseUrl($value);
+                    break;
+                case 'user_agent':
+                    $this->setUserAgent($value);
+                    break;
+                case 'ssl_verify':
+                    $this->requestOptions['verify'] = $value;
+                    break;
+                case 'ssl_certificate':
+                    if ($value === null or $value === false) {
+                        unset($this->requestOptions['cert']);
+                    } else {
+                        $this->requestOptions['cert'] = $value;
+                    }
+                    break;
+                case 'ssl_key':
+                    if ($value === null or $value === false) {
+                        unset($this->requestOptions['ssl_key']);
+                    } else {
+                        $this->requestOptions['ssl_key'] = $value;
+                    }
+                    break;
+                case 'throw_exceptions':
+                    $this->setThrowExceptions($value);
+                    break;
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Set the "User-Agent" header to be used on all requests.
+     *
+     * @param string $userAgent User agent string
+     * @return self Provides a fluent interface
      */
     public function setUserAgent($userAgent)
     {
         $this->userAgent = $userAgent;
-
-        $this->getHttpClient()->setUserAgent($userAgent);
+        return $this;
     }
 
     /**
-     * @param string|bool $user
-     * @param string      $password
-     * @param string      $scheme
+     * Set HTTP authorization parameters.
+     *
+     * @param string|bool $user     Username or false to disable authentication
+     * @param string      $password Password
+     * @param string      $scheme   Authentication scheme (<tt>Basic</tt> or <tt>Digest</tt>)
+     *
+     * @return self Provides a fluent interface
      */
     public function setAuth($user, $password = '', $scheme = 'Basic')
     {
         if ($user === null or $user === false) {
-            $this->username = $this->password = $this->authType = null;
+            unset($this->requestOptions['auth']);
         } else {
-            $this->username = $user;
-            $this->password = $password;
-            $this->authType = $scheme;
+            $this->requestOptions['auth'] = array($user, $password, $scheme);
         }
+
+        return $this;
     }
 
     /**
-     * @param string|bool $certificateAuthority
-     * @param bool        $verifyPeer
-     */
-    public function setSslVerify($certificateAuthority = true, $verifyPeer = true)
-    {
-        $this->getHttpClient()->setSslVerification($certificateAuthority, $verifyPeer);
-    }
-
-    /**
-     * @param bool $throwExceptions
+     * Set whether exceptions should be thrown when an HTTP error is returned.
      *
-     * @return self
+     * @param bool $throwExceptions true if exceptions should be thrown
+     * @return self Provides a fluent interface
      */
     public function setThrowExceptions($throwExceptions = true)
     {
@@ -622,50 +821,30 @@ class Client
     }
 
     /**
-     * @param HttpClient $client
+     * Set the HTTP client.
+     *
+     * @param HttpClient $client The HTTP client to use
+     * @return self Provides a fluent interface
      *
      * @internal
      */
     public function setHttpClient(HttpClient $client)
     {
-        $client->setBaseUrl($this->baseUrl)
-               ->setUserAgent($this->userAgent);
-
-        if ($this->authType) {
-            $client->setDefaultOption('auth', array($this->username, $this->password, $this->authType));
-        }
-
         $this->httpClient = $client;
+        return $this;
     }
 
     /**
-     * @return HttpClient
-     *
-     * @internal
+     * @return HttpClient Returns the HTTP client to use
      */
-    public function getHttpClient()
+    protected function getHttpClient()
     {
+        // @codeCoverageIgnoreStart
         if ($this->httpClient === null) {
-            $this->httpClient = $this->getDefaultHttpClient();
+            $this->httpClient = new HttpClient();
         }
+        // @codeCoverageIgnoreEnd
 
         return $this->httpClient;
-    }
-
-    /**
-     * @return HttpClient
-     *
-     * @internal
-     */
-    protected function getDefaultHttpClient()
-    {
-        $httpClient = new HttpClient($this->baseUrl);
-        $httpClient->setUserAgent($this->userAgent);
-
-        if ($this->authType) {
-            $httpClient->setDefaultOption('auth', array($this->username, $this->password, $this->authType));
-        }
-
-        return $httpClient;
     }
 }

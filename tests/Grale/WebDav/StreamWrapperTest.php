@@ -10,18 +10,32 @@
 
 namespace Grale\WebDav;
 
+use Guzzle\Http\Message\RequestFactory;
+use Guzzle\Http\EntityBody;
+
+/**
+ * @covers Grale\WebDav\StreamWrapper
+ */
 class StreamWrapperTest extends \PHPUnit_Framework_TestCase
 {
     protected $client;
 
     public function setUp()
     {
-        $this->client = $this->getMock('\Grale\WebDav\Client');
+        $httpClient = $this->getMockBuilder('\Guzzle\Http\Client')->getMock();
+        $wdavClient = $this->getMockBuilder('\Grale\WebDav\Client')->getMock();
 
-        $propfind = MultiStatus::parse($this->client, file_get_contents(__DIR__ . '/../../fixtures/streamwrapper.opendir.xml'));
+        $wdavClient->expects($this->any())->method('getHttpClient')->will($this->returnValue($httpClient));
 
-        $this->client->expects($this->any())->method('setThrowExceptions')->will($this->returnValue($this->client));
-        $this->client->expects($this->any())->method('propfind')->will($this->returnValue($propfind));
+        $stream = EntityBody::fromString('Hello World!');
+        $wdavClient->expects($this->any())->method('getStream')->will($this->returnValue($stream));
+
+        $propfind = MultiStatus::parse($wdavClient, file_get_contents(__DIR__ . '/../../fixtures/streamwrapper.opendir.xml'));
+
+        $wdavClient->expects($this->any())->method('setThrowExceptions')->will($this->returnValue($this->client));
+        $wdavClient->expects($this->any())->method('propfind')->will($this->returnValue($propfind));
+
+        $this->client = $wdavClient;
 
         StreamWrapper::register(null, $this->client);
     }
@@ -142,8 +156,9 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
 
     public function testWritingWithReadOnlyMode()
     {
-        //$stream = fopen('webdav://www.foo.bar', 'r');
-        //fwrite($stream, 'Data to write');
+        $stream = fopen('webdav://www.foo.bar', 'r');
+        $bytes  = fwrite($stream, 'Data to write');
+        $this->assertEquals(0, $bytes);
     }
 
     public function testUploadingData()
@@ -219,7 +234,6 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
                      ->method('createLock')
                      ->with(
                          $this->equalTo('http://www.foo.bar/front.html'),
-                         $this->equalTo($lock->getScope()),
                          $this->anything()
                      )
                      ->will($this->returnValue($lock));
@@ -239,7 +253,6 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
                      ->method('createLock')
                      ->with(
                          $this->equalTo('http://www.foo.bar/front.html'),
-                         $this->equalTo($lock->getScope()),
                          $this->anything()
                      )
                      ->will($this->returnValue($lock));
@@ -295,5 +308,32 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
         $result = flock($fd, LOCK_UN);
 
         $this->assertTrue($result);
+    }
+
+    public function testFstat()
+    {
+        $fh = fopen('webdav://www.foo.bar/front.html', 'r');
+        $stat = fstat($fh);
+
+        $this->assertEquals(strlen('Hello World!'), $stat[7]);
+        $this->assertEquals(strlen('Hello World!'), $stat['size']);
+    }
+
+    public function testIsDir()
+    {
+        $result = is_dir('webdav://www.foo.bar/container');
+        $this->assertTrue($result);
+    }
+
+    public function testIsDirWithCache()
+    {
+        $dir = dir('webdav://www.foo.bar/container');
+
+        $files = array();
+        while (($file = $dir->read()) !== false) {
+            $files[] = $file;
+        }
+
+        $result = is_dir('webdav://www.foo.bar/container/othercontainer');
     }
 }

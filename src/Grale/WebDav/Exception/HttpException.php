@@ -22,14 +22,19 @@ use Guzzle\Http\Exception\BadResponseException;
 abstract class HttpException extends \RuntimeException
 {
     /**
-     * @var Request
+     * @var string
      */
     protected $request;
 
     /**
-     * @var Response
+     * @var string
      */
     protected $response;
+
+    /**
+     * @var int
+     */
+    protected $statusCode;
 
     /**
      * @var string
@@ -90,12 +95,13 @@ abstract class HttpException extends \RuntimeException
             $class = __NAMESPACE__ . '\\ServerFailureException';
         }
 
-        $e = new $class($response->getReasonPhrase(), null, $cause);
-        $e->setResponse($response);
-        $e->setRequest($request);
-
         $statusCode = $response->getStatusCode();
         $httpMethod = $request->getMethod();
+
+        $e = new $class($response->getReasonPhrase(), null, $cause);
+        $e->setStatusCode($statusCode);
+        $e->setResponse($response);
+        $e->setRequest($request);
 
         if (isset(self::$descriptionMapping[$httpMethod][$statusCode])) {
             $e->setDescription(self::$descriptionMapping[$httpMethod][$statusCode]);
@@ -109,7 +115,15 @@ abstract class HttpException extends \RuntimeException
      */
     public function getStatusCode()
     {
-        return $this->response->getStatusCode();
+        return $this->statusCode;
+    }
+
+    /**
+     * @param int $statusCode
+     */
+    public function setStatusCode($statusCode)
+    {
+        $this->statusCode = (int)$statusCode;
     }
 
     /**
@@ -129,7 +143,7 @@ abstract class HttpException extends \RuntimeException
     }
 
     /**
-     * @return Response
+     * @return string
      */
     public function getResponse()
     {
@@ -137,7 +151,7 @@ abstract class HttpException extends \RuntimeException
     }
 
     /**
-     * @param Response $message
+     * @param string $message
      */
     public function setResponse($message)
     {
@@ -145,7 +159,7 @@ abstract class HttpException extends \RuntimeException
     }
 
     /**
-     * @return Request
+     * @return string
      */
     public function getRequest()
     {
@@ -153,10 +167,10 @@ abstract class HttpException extends \RuntimeException
     }
 
     /**
-     * @param Request $message
+     * @param string $message
      */
     public function setRequest($message)
     {
-        $this->request = $message;
+        $this->request = (string)$message;
     }
 }

@@ -10,12 +10,17 @@
 
 namespace Grale\WebDav;
 
+use Grale\WebDav\Property\DateTimeProperty;
+use Grale\WebDav\Property\SupportedLock;
+use Grale\WebDav\Property\LockDiscovery;
+use Grale\WebDav\Property\ResourceType;
+
 /**
- *
+ * Represents a resource on the WebDAV server
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
-class Resource
+class Resource implements LockableInterface
 {
     /**
      * @var string
@@ -47,14 +52,7 @@ class Resource
     }
 
     /**
-     * @return string
-     */
-    public function getPath()
-    {
-    }
-
-    /**
-     * @return string
+     * @return string Returns the absolute href of this resource as returned in the multi-status response body
      */
     public function getHref()
     {
@@ -66,7 +64,9 @@ class Resource
      */
     public function getType()
     {
-        return $this->hasProperty('D:resourcetype') ? $this->getProperty('D:resourcetype')->getValue() : null;
+        return $this->hasProperty(ResourceType::TAGNAME)
+             ? $this->getProperty(ResourceType::TAGNAME)->getValue()
+             : array();
     }
 
     /**
@@ -74,7 +74,9 @@ class Resource
      */
     public function getEtag()
     {
-        return $this->hasProperty('D:getetag') ? $this->getProperty('D:getetag')->getValue() : null;
+        return $this->hasProperty('D:getetag')
+             ? $this->getProperty('D:getetag')->getValue()
+             : null;
     }
 
     /**
@@ -86,11 +88,15 @@ class Resource
     }
 
     /**
-     * @return string
+     * Returns the display name of this resource.
+     *
+     * @return string The display name of this resource
      */
     public function getDisplayName()
     {
-        return $this->hasProperty('D:displayname') ? $this->getProperty('D:displayname')->getValue() : null;
+        return $this->hasProperty('D:displayname')
+             ? $this->getProperty('D:displayname')->getValue()
+             : null;
     }
 
     /**
@@ -98,7 +104,13 @@ class Resource
      */
     public function getCreationDate()
     {
-        return $this->hasProperty('D:creationdate') ? $this->getProperty('D:creationdate')->getTime() : null;
+        $result = null;
+
+        if (($prop = $this->getProperty('D:creationdate')) && $prop instanceof DateTimeProperty) {
+            $result = $prop->getTime();
+        }
+
+        return $result;
     }
 
     /**
@@ -106,7 +118,13 @@ class Resource
      */
     public function getLastModified()
     {
-        return $this->hasProperty('D:getlastmodified') ? $this->getProperty('D:getlastmodified')->getTime() : null;
+        $result = null;
+
+        if (($prop = $this->getProperty('D:getlastmodified')) && $prop instanceof DateTimeProperty) {
+            $result = $prop->getTime();
+        }
+
+        return $result;
     }
 
     /**
@@ -114,6 +132,9 @@ class Resource
      */
     public function getContentLanguage()
     {
+        return $this->hasProperty('D:getcontentlanguage')
+             ? $this->getProperty('D:getcontentlanguage')->getValue()
+             : null;
     }
 
     /**
@@ -131,59 +152,111 @@ class Resource
     }
 
     /**
+     * Returns the mime-type of this resource.
+     *
      * @return string
      */
     public function getContentType()
     {
+        return $this->hasProperty('D:getcontenttype')
+             ? $this->getProperty('D:getcontenttype')->getValue()
+             : null;
     }
 
     /**
-     * @return array
+     * @inheritdoc
      */
-    public function getLocks()
+    public function hasLock($type = null, $scope = null)
     {
+        $result = false;
+
+        if (($prop = $this->getProperty(LockDiscovery::TAGNAME)) && $prop instanceof LockDiscovery) {
+            $result = $prop->hasLock($type, $scope);
+        }
+
+        return $result;
     }
 
     /**
-     * @param string $scope
-     * @param string $type
+     * @inheritdoc
+     */
+    public function getLocks($type = null, $scope = null)
+    {
+        $result = array();
+
+        if (($prop = $this->getProperty(LockDiscovery::TAGNAME)) && $prop instanceof LockDiscovery) {
+            $result = $prop->getLocks($type, $scope);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function hasLockToken($lockToken)
+    {
+        $result = false;
+
+        if (($prop = $this->getProperty(LockDiscovery::TAGNAME)) && $prop instanceof LockDiscovery) {
+            $result = $prop->hasLockToken($lockToken);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getLock($lockToken)
+    {
+        $result = null;
+
+        if (($prop = $this->getProperty(LockDiscovery::TAGNAME)) && $prop instanceof LockDiscovery) {
+            $result = $prop->getLock($lockToken);
+        }
+
+        return $result;
+    }
+
+    /**
      *
-     * @return Lock
-     */
-    public function getLock($scope = null, $type = null)
-    {
-    }
-
-    /**
-     * @param string $scope
-     * @param string $type
+     * Note that this method does not define whether a lock can be successfully executed.
      *
-     * @return bool
-     */
-    public function hasLock($scope = null, $type = null)
-    {
-    }
-
-    /**
-     * @param string $scope
-     * @param string $type
+     * @param string $type  The lock type
+     * @param string $scope The scope of the lock
      *
-     * @return bool
+     * @return bool Returns true if the resource supports any locking or false otherwise
      */
-    public function isLockable($scope = null, $type = null)
+    public function isLockable($type = null, $scope = null)
     {
+        $result = false;
+
+        if (($prop = $this->getProperty(SupportedLock::TAGNAME)) && $prop instanceof SupportedLock) {
+            $result = $prop->isLockable($type, $scope);
+        }
+
+        return $result;
     }
 
     /**
-     * @return bool
+     * @return bool Returns true if the resource represents a collection resource
      */
     public function isCollection()
     {
-        return !$this->properties->has('D:resourcetype') ?: $this->properties->get('D:resourcetype')->isCollection();
+        $result = false;
+
+        if (($prop = $this->getProperty(ResourceType::TAGNAME)) && $prop instanceof ResourceType) {
+            $result = $prop->isCollection();
+        }
+
+        return $result;
     }
 
     /**
-     * @return array
+     * Returns an array of all property names available on this resource.
+     *
+     * @return array Returns an array of property names
      */
     public function getPropertyNames()
     {
@@ -191,6 +264,8 @@ class Resource
     }
 
     /**
+     * Returns all properties present on this resource.
+     *
      * @return PropertySet
      */
     public function getProperties()
@@ -208,8 +283,12 @@ class Resource
     }
 
     /**
-     * @param string $name
-     * @return PropertyInterface
+     * Returns the property with the specified name.
+     *
+     * @param string $name The name of the property
+     *
+     * @return PropertyInterface Returns the property with the given name or <tt>null</tt>
+     * if the property does not exist
      */
     public function getProperty($name)
     {
@@ -256,10 +335,6 @@ class Resource
         }
 
         if ($this->isCollection()) {
-            $stat['mode'] &= ~0100000; // clear S_IFREG
-            $stat['mode'] |= 040000;   // set S_IFDIR
-            $stat[2] = $stat['mode'];
-
             // Directory with 0777 access - see "man 2 stat"
             $stat['mode'] = $stat[2] = 0040777;
         } else {
@@ -270,12 +345,5 @@ class Resource
         $stat['size'] = $stat[7] = $this->getContentLength();
 
         return $stat;
-    }
-
-    /**
-     * @return string
-     */
-    public function __toString()
-    {
     }
 }

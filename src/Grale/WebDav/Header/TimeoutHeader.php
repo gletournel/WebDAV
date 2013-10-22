@@ -11,7 +11,7 @@
 namespace Grale\WebDav\Header;
 
 /**
- *
+ * A <tt>Timeout</tt> header
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
@@ -36,7 +36,7 @@ class TimeoutHeader
     }
 
     /**
-     * Gets the timeout in seconds.
+     * Get the timeout in seconds.
      * @return int Returns the timeout in seconds
      */
     public function getSeconds()
@@ -45,7 +45,7 @@ class TimeoutHeader
     }
 
     /**
-     * Gets the validity date.
+     * Get the validity date.
      *
      * @param int $time Timestamp when the validity date must be calculated from (Defaults to current timestamp)
      *
@@ -53,20 +53,22 @@ class TimeoutHeader
      */
     public function getValidity($time = null)
     {
+        // @codeCoverageIgnoreStart
         if ($time === null) {
             $time = time();
         }
+        // @codeCoverageIgnoreEnd
 
-        return $time + $this->seconds;
+        return $this->seconds >= 0 ? $time + $this->seconds : self::INFINITE;
     }
 
     /**
-     * Gets a string representation of the timeout.
+     * Get a string representation of the timeout value.
      *
      * An infinite timeout will be returned as the "Infinite" string while a timeout of 1 hour,
      * for instance, will be returned as follows: "Second-3600".
      *
-     * @return string Returns the timeout as a string
+     * @return string Returns the timeout value as a string
      */
     public function __toString()
     {
@@ -82,7 +84,7 @@ class TimeoutHeader
     }
 
     /**
-     * Gets the infinite timeout.
+     * Get the infinite timeout.
      * @return self Returns the infinite timeout
      */
     public static function getInfinite()
@@ -100,9 +102,9 @@ class TimeoutHeader
     {
         $header = null;
 
-        if ($str == 'Infinite') {
+        if (strtolower($str) == 'infinite') {
             $header = self::getInfinite();
-        } elseif (substr($str, 0, 7) == 'Second-' && ctype_digit(substr($str, 7))) {
+        } elseif (strtolower(substr($str, 0, 7)) == 'second-' && ctype_digit(substr($str, 7))) {
             $header = new static(substr($str, 7));
         } elseif (is_numeric($str)) {
             $header = new static($str);

@@ -18,12 +18,16 @@ namespace Grale\WebDav;
 interface PropertyInterface
 {
     /**
-     * @return string
+     * Returns the name of this property.
+     *
+     * @return string The name of this property
      */
     public function getName();
 
     /**
-     * @return mixed
+     * Returns the value of this property.
+     *
+     * @return mixed The value of this property
      */
     public function getValue();
 

@@ -11,30 +11,98 @@
 namespace Grale\WebDav\Property;
 
 use Grale\WebDav\Lock;
+use Grale\WebDav\LockableInterface;
 
 /**
  * Describes the active locks on a resource
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
-final class LockDiscovery extends AbstractProperty
+class LockDiscovery extends AbstractProperty implements LockableInterface
 {
     /**
-     * @var array
+     * Element name as described in the WebDAV XML elements definition
      */
-    protected $locks;
+    const TAGNAME = 'D:lockdiscovery';
 
     /**
-     * @param array $locks
+     * @var array The list of active locks
+     */
+    protected $locks = array();
+
+    /**
+     * @var array An index of active locks, for speeding up searches
+     */
+    protected $index = array();
+
+    /**
+     * @var array An index of active lock tokens
+     */
+    protected $tokens = array();
+
+    /**
+     * @param array $locks A list of active locks
      */
     public function __construct(array $locks = array())
     {
-        $this->setName('D:lockdiscovery');
-        $this->locks = $locks;
+        $this->setName(self::TAGNAME);
+
+        foreach ($locks as $activeLock) {
+            $this->add($activeLock);
+        }
     }
 
     /**
-     * @return array
+     * Add an lock to the list of active locks
+     *
+     * @param Lock $lock The lock to add
+     */
+    private function add(Lock $lock)
+    {
+        $index = count($this->locks);
+
+        if ($lock->getToken()) {
+            $this->tokens[$lock->getToken()] = $index;
+        }
+
+        $type    = $lock->getType();
+        $scope   = $lock->getScope();
+        $hashKey = $this->getHashKey($type, $scope);
+
+        if (!isset($this->index[$type])) {
+            $this->index[$type] = array();
+        }
+        if (!isset($this->index[$hashKey])) {
+            $this->index[$hashKey] = array();
+        }
+
+        $this->index[$type][] = $index;
+        $this->index[$hashKey][] = $index;
+
+        $this->locks[] = $lock;
+    }
+
+    /**
+     * Computes a hash key for the given lock type and lock scope
+     *
+     * @param string $type  The lock type
+     * @param string $scope The lock scope
+     *
+     * @return string The hash key for the index table
+     */
+    private function getHashKey($type, $scope)
+    {
+        $hashKey = null;
+
+        if ($type && $scope) {
+            $hashKey = "{$type}{$scope}";
+        }
+
+        return $hashKey;
+    }
+
+    /**
+     * @return array Returns the list of active locks
      */
     public function getValue()
     {
@@ -42,31 +110,48 @@ final class LockDiscovery extends AbstractProperty
     }
 
     /**
-     * @return array
-     */
-    public function getLocks()
-    {
-        return $this->locks;
-    }
-
-    /**
-     * @param string $type
-     * @param string $scope
-     *
-     * @return bool
+     * @inheritdoc
      */
     public function hasLock($type = null, $scope = null)
     {
+        $hashKey = $this->getHashKey($type, $scope);
+
+        return $hashKey ? isset($this->index[$hashKey]) : count($this->locks) > 0;
     }
 
     /**
-     * @param string $type
-     * @param string $scope
-     *
-     * @return Lock
+     * @inheritdoc
      */
-    public function getLock($type = null, $scope = null)
+    public function getLocks($type = null, $scope = null)
     {
+        $result  = array();
+        $hashKey = $this->getHashKey($type, $scope);
+
+        if ($hashKey && isset($this->index[$hashKey])) {
+            foreach ($this->index[$hashKey] as $index) {
+                $result[] = $this->locks[$index];
+            }
+        } elseif ($hashKey === null) {
+            $result = $this->locks;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function hasLockToken($lockToken)
+    {
+        return isset($this->tokens[$lockToken]);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getLock($lockToken)
+    {
+        return isset($this->tokens[$lockToken]) ? $this->locks[$this->tokens[$lockToken]] : null;
     }
 
     /**

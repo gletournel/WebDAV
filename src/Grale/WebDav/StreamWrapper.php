@@ -14,7 +14,6 @@ use Grale\WebDav\Exception\HttpException;
 use Grale\WebDav\Exception\StreamException;
 use Grale\WebDav\Exception\AccessDeniedException;
 use Grale\WebDav\Exception\NoSuchResourceException;
-use Guzzle\Stream\PhpStreamRequestFactory;
 use Guzzle\Http\EntityBody;
 use Guzzle\Http\Url;
 
@@ -23,12 +22,10 @@ use Guzzle\Http\Url;
  *
  * The following context options are available:
  *
- * - <tt>base_url</tt> NOT IN USE!
+ * - <tt>base_url</tt>
  * - <tt>user_agent</tt>
  * - <tt>curl_options</tt>
  * - <tt>throw_exceptions</tt>
- *
- * @todo get the base Url from the DAV client
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
@@ -46,7 +43,6 @@ class StreamWrapper
 
     /**
      * @var resource Stream context
-     *
      * @internal
      */
     public $context;
@@ -57,28 +53,17 @@ class StreamWrapper
     protected $mode;
 
     /**
-     * Underlying stream resource
-     *
-     * @var EntityBody
+     * @var EntityBody Underlying stream resource
      */
     protected $stream;
 
     /**
-     * An iterator used to iterate the <tt>response</tt> elements of a WebDAV multi-status response.
-     *
-     * This iterator is used with opendir() and subsequent readdir() calls.
-     *
-     * @var array
+     * @var Iterator An iterator used to iterate the <tt>response</tt> elements of a WebDAV multi-status response
      */
     protected $iterator;
 
     /**
-     * @var string
-     */
-    protected $target;
-
-    /**
-     * @var string
+     * @var string The file/resource that was actually opened
      */
     protected $openedPath;
 
@@ -98,7 +83,7 @@ class StreamWrapper
     protected static $options = array();
 
     /**
-     * @var array
+     * @var array Wrappers and their respective schemes
      */
     protected static $protocols = array(
         self::PROTOCOL        => 'http',
@@ -138,6 +123,8 @@ class StreamWrapper
 
             self::$options = $options ? array(self::PROTOCOL => $options) : array();
             self::$client  = $client;
+
+            stream_context_set_default(self::$options);
         }
 
         return $result;
@@ -200,6 +187,9 @@ class StreamWrapper
                 throw new \RuntimeException("Mode not supported: {$mode}. Use one 'r', 'w', 'a', or 'x'.");
             }
 
+            // Can retrieve the context options
+            self::$client->setConfig($this->getOptions());
+
             // When using mode 'x', validate if the file exists before attempting to read
             if ($mode == 'x' && self::$client->exists($url)) {
                 throw new \RuntimeException("{$path} already exists");
@@ -260,7 +250,14 @@ class StreamWrapper
      */
     public function stream_write($data)
     {
-        return $this->stream->write($data);
+        $bytes = 0;
+
+        // Simultaneous reading and writing is not supported
+        if ($this->mode != 'r') {
+            $bytes = $this->stream->write($data);
+        }
+
+        return $bytes;
     }
 
     /**
@@ -279,13 +276,13 @@ class StreamWrapper
 
         $this->stream->rewind();
 
-        $headers = array();
+        $options = array();
 
         if ($this->locktoken) {
-            $headers['If'] = sprintf('(<%s>)', $this->locktoken);
+            $options['locktoken'] = sprintf('(<%s>)', $this->locktoken);
         }
 
-        return self::$client->put($this->openedPath, $headers, $this->stream);
+        return self::$client->put($this->openedPath, $this->stream, $options);
     }
 
     /**
@@ -419,7 +416,7 @@ class StreamWrapper
             $destination = $this->resolveUrl($new);
 
             // Can retrieve the context options
-            $contextOptions = $this->getOptions();
+            self::$client->setConfig($this->getOptions());
 
             $result = self::$client->move($source, $destination, array('locktoken' => $this->locktoken));
 
@@ -446,9 +443,15 @@ class StreamWrapper
             $url = $this->resolveUrl($path);
 
             // Can retrieve the context options
-            $contextOptions = $this->getOptions();
+            self::$client->setConfig($this->getOptions());
 
-            $result = self::$client->delete($url, $this->locktoken);
+            $options = array();
+
+            if ($this->locktoken) {
+                $options['locktoken'] = $this->locktoken;
+            }
+
+            $result = self::$client->delete($url, $options);
 
         } catch (\Exception $exception) {
             $result = $this->triggerError($exception);
@@ -479,9 +482,15 @@ class StreamWrapper
             $url = $this->resolveUrl($path);
 
             // Can retrieve the context options
-            $contextOptions = $this->getOptions();
+            self::$client->setConfig($this->getOptions());
 
-            $result = self::$client->mkcol($url, $this->locktoken);
+            $options = array();
+
+            if ($this->locktoken) {
+                $options['locktoken'] = $this->locktoken;
+            }
+
+            $result = self::$client->mkcol($url, $options);
 
         } catch (\Exception $exception) {
             $result = $this->triggerError($exception, ($options & STREAM_REPORT_ERRORS) != STREAM_REPORT_ERRORS);
@@ -507,10 +516,16 @@ class StreamWrapper
             $url = $this->resolveUrl($path);
 
             // Can retrieve the context options
-            $contextOptions = $this->getOptions();
+            self::$client->setConfig($this->getOptions());
+
+            $options = array();
+
+            if ($this->locktoken) {
+                $options['locktoken'] = $this->locktoken;
+            }
 
             // The directory must be empty, and the relevant permissions must permit this
-            $result = self::$client->delete($url, $this->locktoken);
+            $result = self::$client->delete($url, $options);
 
         } catch (\Exception $exception) {
             $result = $this->triggerError($exception, ($options & STREAM_REPORT_ERRORS) != STREAM_REPORT_ERRORS);
@@ -539,9 +554,9 @@ class StreamWrapper
             $this->clearStatCache();
 
             // Can retrieve the context options
-            $contextOptions = $this->getOptions();
+            self::$client->setConfig($this->getOptions());
 
-            $response = self::$client->propfind($url, 1);
+            $response = self::$client->propfind($url, array('depth' => 1));
 
             $this->iterator   = $response->getIterator();
             $this->openedPath = $url;
@@ -621,18 +636,16 @@ class StreamWrapper
      */
     public function url_stat($path, $flags)
     {
-        if (isset(self::$statCache[$path])) {
-            return self::$statCache[$path];
-        }
-
         $quiet = ($flags & STREAM_URL_STAT_QUIET) == STREAM_URL_STAT_QUIET;
-
-        // self::$client->exists($uri); // HTTP HEAD request
 
         try {
             $url = $this->resolveUrl($path);
 
-            $response = self::$client->propfind($url);
+            if (isset(self::$statCache[(string)$url])) {
+                return self::$statCache[(string)$url];
+            }
+
+            $response = self::$client->propfind($url, array('depth' => 0));
 
             if ($response->count() > 0) {
                 $result = current($response->getIterator());
@@ -704,8 +717,9 @@ class StreamWrapper
         $timeout = 3600;
 
         if ($this->locktoken === null) {
-            $result = self::$client->createLock($this->openedPath, $scope, array(
+            $result = self::$client->createLock($this->openedPath, array(
                 'owner'   => __CLASS__,
+                'scope'   => $scope,
                 'timeout' => $timeout
             ));
         } else {
@@ -734,18 +748,12 @@ class StreamWrapper
     /**
      * Initialize the stream wrapper for a read-only stream
      *
-     * - place the file pointer at the beginning of the file
-     *
      * @return bool Returns true on success or false on failure
      */
     protected function openReadOnly($url)
     {
-        /*
-        $request = self::$client->getHttpClient()->get($url);
-        $factory = new PhpStreamRequestFactory();
+        $this->stream = self::$client->getStream($url);
 
-        $this->stream = $factory->fromRequest($request, array(), array('stream_class' => 'Guzzle\Http\EntityBody'));
-        */
         return true;
     }
 
@@ -757,9 +765,9 @@ class StreamWrapper
     protected function openAppendMode($url)
     {
         try {
-            $response = self::$client->get($url);
+            $contents = self::$client->get($url);
 
-            $this->stream = EntityBody::fromString($response->getBody());
+            $this->stream = EntityBody::fromString($contents);
             $this->stream->seek(0, SEEK_END);
 
         } catch (HttpException $e) {
@@ -788,7 +796,7 @@ class StreamWrapper
      * @return Url
      * @throws \InvalidArgumentException
      */
-    public function resolveUrl($path)
+    protected function resolveUrl($path)
     {
         $url = Url::factory($path);
 

@@ -11,19 +11,19 @@
 namespace Grale\WebDav;
 
 /**
- *
+ * A set of WebDAV properties
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
 class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
 {
     /**
-     * @var array
+     * @var array The set of properties
      */
     protected $properties = array();
 
     /**
-     * @param array $properties
+     * @param array $properties The set of properties
      */
     public function __construct(array $properties = array())
     {
@@ -36,8 +36,10 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @param PropertyInterface $property
-     * @return self
+     * Adds a new property to this set.
+     *
+     * @param PropertyInterface $property The property to add
+     * @return self Provides a fluent interface
      */
     public function add(PropertyInterface $property)
     {
@@ -46,9 +48,12 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @param string $name
+     * Retrieves the property with the specified name.
      *
-     * @return PropertyInterface
+     * @param string $name The name of the property to retrieve
+     *
+     * @return PropertyInterface Returns the desired property or <tt>null</tt>
+     * if no property exists for the specified name
      */
     public function get($name)
     {
@@ -56,8 +61,10 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @param string $name
-     * @return bool
+     * Checks if this set contains the property with the specified name.
+     *
+     * @param string $name The name of the property
+     * @return bool Returns true if this set contains the property, or false otherwise
      */
     public function has($name)
     {
@@ -65,7 +72,9 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @param string $name
+     * Removes the indicated property from this set.
+     *
+     * @param string $name The property name to remove
      */
     public function remove($name)
     {
@@ -73,7 +82,9 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @return array
+     * Returns all properties present in this set.
+     *
+     * @return array Returns an array of all properties present in this set
      */
     public function getAll()
     {
@@ -81,7 +92,9 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @return array
+     * Returns the names of all properties present in this set.
+     *
+     * @return array Returns an array of all property names present in this set
      */
     public function getNames()
     {
@@ -89,7 +102,9 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @return Iterator
+     * Returns an iterator over all properties in this set.
+     *
+     * @return Iterator An iterator over {@link PropertyInterface}
      */
     public function getIterator()
     {
@@ -97,9 +112,12 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @param string $offset
+     * Whether or not an offset exists.
      *
-     * @return bool
+     * @param string $offset An offset to check for
+     * @return bool Returns true if offset exists or false otherwise
+     *
+     * @internal
      */
     public function offsetExists($offset)
     {
@@ -107,9 +125,12 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @param string $offset
+     * Returns the value at specified offset.
      *
-     * @return mixed
+     * @param string $offset The offset to retrieve
+     * @return mixed Returns the value of the property at specified offset
+     *
+     * @internal
      */
     public function offsetGet($offset)
     {
@@ -117,8 +138,12 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @param string $offset
-     * @param mixed  $value
+     * Assigns a value to the specified offset.
+     *
+     * @param string $offset The offset to assign the value to
+     * @param mixed  $value  The value to set
+     *
+     * @internal
      */
     public function offsetSet($offset, $value)
     {
@@ -126,7 +151,11 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @param string $offset
+     * Unsets an offset.
+     *
+     * @param string $offset The offset to unset
+     *
+     * @internal
      */
     public function offsetUnset($offset)
     {
@@ -134,7 +163,9 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     }
 
     /**
-     * @return int
+     * Returns the size of this set.
+     *
+     * @return int Returns the number of properties present in this set
      */
     public function count()
     {

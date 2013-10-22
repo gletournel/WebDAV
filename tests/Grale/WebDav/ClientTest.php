@@ -15,13 +15,41 @@ use Guzzle\Http\Message\Response;
 use Guzzle\Http\Message\RequestFactory;
 use Guzzle\Http\Exception\BadResponseException;
 
+/**
+ * @covers Grale\WebDav\Client
+ */
 class ClientTest extends \PHPUnit_Framework_TestCase
 {
+    public function testBaseUrl()
+    {
+        $client = new Client('http://www.foo.bar');
+        $this->assertEquals('http://www.foo.bar', $client->getBaseUrl());
+    }
+
+    public function testConfig()
+    {
+        $client = new Client('', array(
+            'base_url' => 'http://www.foo.bar',
+            'auth' => array('user', 'pass', 'Basic'),
+            'user_agent' => 'my/custom/agent'
+        ));
+
+        $mock = $this->getHttpClientMock(new Response(200));
+        $client->setHttpClient($mock);
+
+        $this->assertEquals('http://www.foo.bar', $client->getBaseUrl());
+
+        $client->get('http://www.foo.bar/resource');
+        $request = $client->getLastRequest();
+        $this->assertContains('User-Agent: my/custom/agent', $request);
+        $this->assertContains('Authorization: Basic dXNlcjpwYXNz', $request);
+    }
+
     ///////////////////////////////////////////
     /////////////// OPTIONS Method ////////////
     ///////////////////////////////////////////
 
-    public function testGetCompliance()
+    public function testGetComplianceClasses()
     {
         $response = new Response(200, array(
             'Dav' => '1, 2, <http://apache.org/dav/propset/fs/1>'
@@ -30,12 +58,12 @@ class ClientTest extends \PHPUnit_Framework_TestCase
         $client = new Client('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock($response));
 
-        $result = $client->getCompliance();
+        $result = $client->getComplianceClasses();
 
         $this->assertEquals(array('1', '2', '<http://apache.org/dav/propset/fs/1>'), $result);
     }
 
-    public function testGetAllowedMethods()
+    public function testGetSupportedMethods()
     {
         $response = new Response(200, array(
             'Allow' => 'GET, POST, MKCOL, PROPFIND'
@@ -44,7 +72,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
         $client = new Client('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock($response));
 
-        $result = $client->getAllowedMethods();
+        $result = $client->getSupportedMethods();
 
         $this->assertEquals(array('GET', 'POST', 'MKCOL', 'PROPFIND'), $result);
     }
@@ -53,16 +81,52 @@ class ClientTest extends \PHPUnit_Framework_TestCase
     /////////////// HEAD Method ///////////////
     ///////////////////////////////////////////
 
+    public function testExists()
+    {
+        $client = new Client('http://www.example.com');
+        $client->setHttpClient($this->getHttpClientMock(new Response(200)));
 
-    ///////////////////////////////////////////
-    /////////////// GET Method ////////////////
-    ///////////////////////////////////////////
+        $this->assertTrue($client->exists('/resource'));
+    }
 
+    public function testNotExist()
+    {
+        $client = new Client('http://www.example.com');
+        $client->setHttpClient($this->getHttpClientMock(new Response(404)));
+
+        $this->assertFalse($client->exists('/resource'));
+    }
 
     ///////////////////////////////////////////
     /////////////// PUT Method ////////////////
     ///////////////////////////////////////////
 
+    public function testPutWithLockToken()
+    {
+        $client = new Client('http://www.example.com');
+        $client->setHttpClient($this->getHttpClientMock(new Response(201)));
+
+        $client->put('resource', 'Hello World', array(
+            'locktoken' => 'opaquelocktoken:e71d4fae-5dec-22d6-fea5-00a0c91e6be4'
+        ));
+
+        $request = $client->getLastRequest();
+        $this->assertContains('If: (<opaquelocktoken:e71d4fae-5dec-22d6-fea5-00a0c91e6be4>)', $request);
+    }
+
+    public function testPutSuccessfully()
+    {
+        $client = new Client('http://www.example.com');
+        $client->setHttpClient($this->getHttpClientMock(new Response(201)));
+        $this->assertTrue($client->put('resource', 'data'));
+    }
+
+    public function testPutFailed()
+    {
+        $client = new Client('http://www.example.com');
+        $client->setHttpClient($this->getHttpClientMock(new Response(423)));
+        $this->assertFalse($client->put('resource', 'data'));
+    }
 
     ///////////////////////////////////////////
     /////////////// DELETE Method /////////////
@@ -340,7 +404,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
             'R:Random'
         );
 
-        $result  = $client->propfind('/file', 0, $properties);
+        $result  = $client->propfind('/file', array('properties' => $properties));
         $status  = $client->getLastResponseStatus();
         $request = $client->getLastRequest();
 
@@ -370,7 +434,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
         $client = new Client('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.propfind-allprop')));
 
-        $result  = $client->propfind('/container/', 1);
+        $result  = $client->propfind('/container/', array('depth' => 1));
         $status  = $client->getLastResponseStatus();
         $request = $client->getLastRequest();
 
@@ -399,7 +463,8 @@ class ClientTest extends \PHPUnit_Framework_TestCase
         $client = new Client('http://webdav.sb.aol.com');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.simple-lock')));
 
-        $lock = $client->createLock('/workspace/webdav/proposal.doc', 'exclusive', array(
+        $lock = $client->createLock('/workspace/webdav/proposal.doc', array(
+            'scope'   => 'exclusive',
             'owner'   => 'http://www.ics.uci.edu/~ejw/contact.html',
             'timeout' => 4100000000
         ));
@@ -425,8 +490,8 @@ class ClientTest extends \PHPUnit_Framework_TestCase
 
         $this->assertEquals('http://www.ics.uci.edu/~ejw/contact.html', $lock->getOwner());
         $this->assertEquals('opaquelocktoken:e71d4fae-5dec-22d6-fea5-00a0c91e6be4', $lock->getToken());
-        $this->assertEquals(604800, $lock->getTimeout()->getSeconds());
-        $this->assertEquals(DepthHeader::INFINITY, $lock->getDepth());
+        $this->assertEquals(604800, $lock->getTimeout());
+        $this->assertTrue($lock->isDeep());
     }
 
     /**
@@ -447,8 +512,8 @@ class ClientTest extends \PHPUnit_Framework_TestCase
 
         $this->assertInstanceOf('Grale\\WebDav\\Lock', $result);
         $this->assertEquals('opaquelocktoken:e71d4fae-5dec-22d6-fea5-00a0c91e6be4', $result->getToken());
-        $this->assertEquals(604800, $result->getTimeout()->getSeconds());
-        $this->assertEquals(DepthHeader::INFINITY, $result->getDepth());
+        $this->assertEquals(604800, $result->getTimeout());
+        $this->assertTrue($result->isDeep());
 
         $this->assertContains('Timeout: Second-4100000000', $request);
         $this->assertContains('LOCK /workspace/webdav/proposal.doc HTTP/1.1', $request);
@@ -465,7 +530,8 @@ class ClientTest extends \PHPUnit_Framework_TestCase
         $client = new Client('http://webdav.sb.aol.com');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.multi-resource-lock')));
 
-        $client->createLock('/webdav/', 'exclusive', array(
+        $client->createLock('/webdav/', array(
+            'scope'   => 'exclusive',
             'owner'   => 'http://www.ics.uci.edu/~ejw/contact.html',
             'timeout' => 4100000000
         ));
@@ -485,7 +551,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
         $client = new Client('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock(new Response($status)));
         $client->setThrowExceptions();
-        $client->createLock('/resource', 'exclusive');
+        $client->createLock('/resource');
     }
 
     public function getLockBadResponses()

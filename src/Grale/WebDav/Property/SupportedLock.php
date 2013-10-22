@@ -15,8 +15,13 @@ namespace Grale\WebDav\Property;
  *
  * @author Geoffroy Letournel <geoffroy.letournel@gmail.com>
  */
-final class SupportedLock extends AbstractProperty
+class SupportedLock extends AbstractProperty
 {
+    /**
+     * Element name as described in the WebDAV XML elements definition
+     */
+    const TAGNAME = 'D:supportedlock';
+
     /**
      * @var array The lock capabilities
      */
@@ -27,7 +32,7 @@ final class SupportedLock extends AbstractProperty
      */
     public function __construct(array $capabilities = array())
     {
-        $this->setName('D:supportedlock');
+        $this->setName(self::TAGNAME);
         $this->capabilities = $capabilities;
     }
 
