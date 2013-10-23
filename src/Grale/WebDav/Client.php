@@ -131,18 +131,43 @@ class Client
     }
 
     /**
-     * get the streaming contents of the specified resource.
+     * Get the streaming contents of the specified resource.
      *
      * @param string $uri Resource URI
      *
-     * @return EntityBody
+     * @return EntityBody Returns the stream resource on success or false on failure
      * @throws \RuntimeException If the stream cannot be opened or an error occurs
      */
     public function getStream($uri)
     {
         $request = $this->createRequest('GET', $uri);
+
         $factory = new PhpStreamRequestFactory();
-        return $factory->fromRequest($request, array(), array('stream_class' => 'Guzzle\Http\EntityBody'));
+        $stream  = $factory->fromRequest($request, array(), array('stream_class' => 'Guzzle\Http\EntityBody'));
+
+        // The implementation of streaming download proposed by Guzzle's EntityBody class does not care about
+        // HTTP errors. As a workaround, let's rebuild the HTTP response from the response headers sent in the
+        // $http_response_header variable (http://www.php.net/manual/en/reserved.variables.httpresponseheader.php)
+        $response = HttpResponse::fromMessage(implode("\r\n", $factory->getLastResponseHeaders()));
+
+        // Creates History
+        $this->lastRequest  = $request;
+        $this->lastResponse = $response;
+
+        if (!$response->isSuccessful()) {
+            $stream = false;
+        }
+
+        if (!$stream && $this->throwExceptions) {
+            switch ($response->getStatusCode()) {
+                case 404:
+                    throw new NoSuchResourceException('No such file or directory');
+                default:
+                    throw new \RuntimeException($response->getReasonPhrase(), $response->getStatusCode());
+            }
+        }
+
+        return $stream;
     }
 
     /**
@@ -637,7 +662,22 @@ class Client
      */
     public function registerStreamWrapper()
     {
-        return StreamWrapper::register($this->getConfig(), $this);
+        return StreamWrapper::register($this->getContextOptions(), $this);
+    }
+
+    /**
+     * Get the context options for the WebDAV stream wrapper.
+     *
+     * @return array Returns context options and parameters which can be used with the WebDAV stream wrapper
+     */
+    public function getContextOptions()
+    {
+        $options = array(
+            'base_url'   => $this->baseUrl,
+            'user_agent' => $this->userAgent
+        );
+
+        return $options + $this->requestOptions;
     }
 
     /**
