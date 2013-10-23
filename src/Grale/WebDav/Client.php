@@ -637,7 +637,22 @@ class Client
      */
     public function registerStreamWrapper()
     {
-        return StreamWrapper::register(array(), $this);
+        return StreamWrapper::register($this->getContextOptions(), $this);
+    }
+
+    /**
+     * Get the context options for the WebDAV stream wrapper.
+     *
+     * @return array Returns context options and parameters which can be used with the WebDAV stream wrapper
+     */
+    public function getContextOptions()
+    {
+        $options = array(
+            'base_url'   => $this->baseUrl,
+            'user_agent' => $this->userAgent
+        );
+
+        return $options + $this->requestOptions;
     }
 
     /**
