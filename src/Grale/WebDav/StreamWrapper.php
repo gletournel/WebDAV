@@ -832,7 +832,14 @@ class StreamWrapper
      */
     protected function resolveUrl($path)
     {
-        $url = Url::factory($path);
+        $baseUrl = self::$client->getBaseUrl();
+
+        if ($baseUrl) {
+            list($scheme, $uri) = explode('://', $path, 2);
+            $url = Url::factory($baseUrl)->combine($uri);
+        } else {
+            $url = Url::factory($path);
+        }
 
         $protocol = $url->getScheme();
 
