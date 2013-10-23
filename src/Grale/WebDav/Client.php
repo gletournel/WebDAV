@@ -637,7 +637,7 @@ class Client
      */
     public function registerStreamWrapper()
     {
-        return StreamWrapper::register($this->getConfig(), $this);
+        return StreamWrapper::register(array(), $this);
     }
 
     /**
