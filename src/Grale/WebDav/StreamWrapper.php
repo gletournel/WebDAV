@@ -559,6 +559,9 @@ class StreamWrapper
             $this->clearStatCache();
             $this->setClientConfig();
 
+            // Ensures that resource path ends with a slash
+            $path = rtrim($path, '/') . '/';
+
             $url = $this->resolveUrl($path);
             $response = self::$client->propfind($url, array('depth' => 1));
 
