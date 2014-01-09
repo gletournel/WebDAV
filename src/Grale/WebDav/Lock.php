@@ -136,6 +136,8 @@ class Lock
      * Accepted values are zero or {@link Header\DepthHeader::INFINITY}
      *
      * @param int $depth The depth of lock
+     *
+     * @throws \InvalidArgumentException
      */
     public function setDepth($depth)
     {
@@ -203,8 +205,11 @@ class Lock
     }
 
     /**
-     * @return self
+     * @param \DOMElement $element
+     *
      * @throws \InvalidArgumentException
+     * @return self
+     *
      * @todo define exception message
      */
     public static function fromXml(\DOMElement $element)
@@ -251,6 +256,7 @@ class Lock
      * @param Client $client
      * @param string $xml
      *
+     * @throws \RuntimeException
      * @return self
      *
      * @todo

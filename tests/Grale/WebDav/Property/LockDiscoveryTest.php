@@ -17,6 +17,9 @@ use Grale\WebDav\Lock;
  */
 class LockDiscoveryTest extends \PHPUnit_Framework_TestCase
 {
+    /**
+     * @var LockDiscovery
+     */
     protected $property;
 
     public function setUp()

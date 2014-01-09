@@ -20,8 +20,19 @@ use Grale\WebDav\Property\LockDiscovery;
  */
 class ResourceTest extends \PHPUnit_Framework_TestCase
 {
+    /**
+     * @var \Grale\WebDav\Resource
+     */
     protected $collection;
+
+    /**
+     * @var \Grale\WebDav\Resource
+     */
     protected $resource;
+
+    /**
+     * @var Lock
+     */
     protected $lock;
 
     public function setUp()
@@ -160,7 +171,10 @@ class ResourceTest extends \PHPUnit_Framework_TestCase
 
     public function testGetLock()
     {
-        $this->assertEquals($this->lock, $this->resource->getLock('opaquelocktoken:e71d4fae-5dec-22d6-fea5-00a0c91e6be4'));
+        $this->assertEquals(
+            $this->lock,
+            $this->resource->getLock('opaquelocktoken:e71d4fae-5dec-22d6-fea5-00a0c91e6be4')
+        );
     }
 
     public function testGetNoLocks()

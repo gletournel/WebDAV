@@ -55,8 +55,6 @@ class SupportedLock extends AbstractProperty
      */
     public function isLockable($type = null, $scope = null)
     {
-        $result = false;
-
         if ($type === null) {
             $result = count($this->capabilities) > 0;
         } elseif ($scope === null) {

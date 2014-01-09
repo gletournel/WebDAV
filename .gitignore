@@ -2,7 +2,7 @@ phpunit.xml
 composer.lock
 vendor/
 build/
-nbproject
+.idea
 .twgit
 .twgit_features_subject
 .settings

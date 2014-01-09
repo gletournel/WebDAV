@@ -18,6 +18,9 @@ use Grale\WebDav\Header\DepthHeader;
  */
 class LockTest extends \PHPUnit_Framework_TestCase
 {
+    /**
+     * @var Lock
+     */
     protected $lock;
 
     public function setUp()
@@ -113,7 +116,7 @@ class LockTest extends \PHPUnit_Framework_TestCase
     public function testFromInvalidXml()
     {
         $dom = new \DOMDocument();
-        $dom->loadXML('<?xml version="1.0" encoding="utf-8"?><element/>');
+        $dom->loadXML('<?xml version="1.0" encoding="utf-8"?><html></html>');
         Lock::fromXml($dom->documentElement);
     }
 
