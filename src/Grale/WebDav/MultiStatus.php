@@ -68,7 +68,7 @@ class MultiStatus implements \IteratorAggregate, \Countable
     }
 
     /**
-     * @return Iterator Returns an iterator to be used in loop functions
+     * @return \Iterator Returns an iterator to be used in loop functions
      */
     public function getIterator()
     {
@@ -84,9 +84,10 @@ class MultiStatus implements \IteratorAggregate, \Countable
     }
 
     /**
-     * @param Client $client
-     * @param string $xml    The multi-status response as an XML string
+     * @param WebDavClient $client
+     * @param string $xml The multi-status response as an XML string
      *
+     * @throws \RuntimeException
      * @return self Returns the parsed multi-status response as an object
      *
      * @todo
@@ -94,7 +95,7 @@ class MultiStatus implements \IteratorAggregate, \Countable
      * - register namespaces automatically with the Xpath object
      * - testing DOMDocument::loadXML throwing DOMException with the libxml settings and an erroneous XML document
      */
-    public static function parse(Client $client, $xml)
+    public static function parse(WebDavClient $client, $xml)
     {
         $xml = preg_replace('/\s*[\r\n]\s*/', null, $xml);
 
@@ -158,7 +159,9 @@ class MultiStatus implements \IteratorAggregate, \Countable
 
     /**
      * @param string $statusLine
+     * @throws \Exception
      * @return int
+     * @todo define exception here
      */
     protected static function parseHttpStatus($statusLine)
     {

@@ -35,6 +35,7 @@ class Resource implements LockableInterface
     /**
      * @param string $href
      * @param PropertySet|array
+     * @throws \InvalidArgumentException
      */
     public function __construct($href, $properties = null)
     {

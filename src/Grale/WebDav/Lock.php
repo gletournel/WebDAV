@@ -136,6 +136,8 @@ class Lock
      * Accepted values are zero or {@link Header\DepthHeader::INFINITY}
      *
      * @param int $depth The depth of lock
+     *
+     * @throws \InvalidArgumentException
      */
     public function setDepth($depth)
     {
@@ -203,8 +205,11 @@ class Lock
     }
 
     /**
-     * @return self
+     * @param \DOMElement $element
+     *
      * @throws \InvalidArgumentException
+     * @return self
+     *
      * @todo define exception message
      */
     public static function fromXml(\DOMElement $element)
@@ -248,9 +253,10 @@ class Lock
     }
 
     /**
-     * @param Client $client
+     * @param WebDavClient $client
      * @param string $xml
      *
+     * @throws \RuntimeException
      * @return self
      *
      * @todo
@@ -258,7 +264,7 @@ class Lock
      * - register namespaces automatically with the Xpath object
      * - testing DOMDocument::loadXML throwing DOMException with the libxml settings and an erroneous XML document
      */
-    public static function parse(Client $client, $xml)
+    public static function parse(WebDavClient $client, $xml)
     {
         $xml = preg_replace('/\s*[\r\n]\s*/', null, $xml);
 

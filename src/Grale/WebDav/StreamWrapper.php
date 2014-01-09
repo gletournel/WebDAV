@@ -10,9 +10,7 @@
 
 namespace Grale\WebDav;
 
-use Grale\WebDav\Exception\HttpException;
 use Grale\WebDav\Exception\StreamException;
-use Grale\WebDav\Exception\AccessDeniedException;
 use Grale\WebDav\Exception\NoSuchResourceException;
 use Guzzle\Http\EntityBody;
 use Guzzle\Http\Url;
@@ -57,7 +55,7 @@ class StreamWrapper
     protected $stream;
 
     /**
-     * @var Iterator An iterator used to iterate the <tt>response</tt> elements of a WebDAV multi-status response
+     * @var \Iterator An iterator used to iterate the <tt>response</tt> elements of a WebDAV multi-status response
      */
     protected $iterator;
 
@@ -72,7 +70,7 @@ class StreamWrapper
     protected $locktoken;
 
     /**
-     * @var Client WebDAV client used to send requests
+     * @var WebDavClient WebDAV client used to send requests
      */
     protected static $client;
 
@@ -96,12 +94,12 @@ class StreamWrapper
 
     /**
      * @param array  $options An associative array of default stream context options
-     * @param Client $client  WebDAV Client to use with the stream wrapper
+     * @param WebDavClient $client  WebDAV Client to use with the stream wrapper
      *
      * @return bool Returns true on success or false on failure
      * @throws \RuntimeException If a stream wrapper has already been registered
      */
-    public static function register(array $options = null, Client $client = null)
+    public static function register(array $options = null, WebDavClient $client = null)
     {
         $result = true;
 
@@ -146,11 +144,11 @@ class StreamWrapper
     }
 
     /**
-     * @return Client Returns the default WebDAV Client to use with the stream wrapper
+     * @return WebDavClient Returns the default WebDAV Client to use with the stream wrapper
      */
     public static function getDefaultClient()
     {
-        return new Client();
+        return new WebDavClient();
     }
 
     // @codingStandardsIgnoreStart
@@ -168,7 +166,7 @@ class StreamWrapper
      */
     public function stream_open($path, $mode, $options, &$openedPath)
     {
-        $result = false;
+        $url = null;
 
         try {
             // We don't care about text-mode translation and binary-mode flags
@@ -336,8 +334,6 @@ class StreamWrapper
      */
     public function stream_lock($operation)
     {
-        $result = false;
-
         try {
             // We don't care about LOCK_NB
             $operation = $operation & ~LOCK_NB;
@@ -412,8 +408,6 @@ class StreamWrapper
      */
     public function rename($old, $new)
     {
-        $result = false;
-
         try {
             // Retrieve the context options
             $this->setClientConfig();
@@ -443,8 +437,6 @@ class StreamWrapper
      */
     public function unlink($path)
     {
-        $result = false;
-
         try {
             // Retrieve the context options
             $this->setClientConfig();
@@ -479,8 +471,6 @@ class StreamWrapper
      */
     public function mkdir($path, $mode, $options)
     {
-        $result = false;
-
         try {
             if ($options & STREAM_MKDIR_RECURSIVE) {
                 throw new \RuntimeException('WebDAV stream wrapper does not allow to create directories recursively');
@@ -518,8 +508,6 @@ class StreamWrapper
      */
     public function rmdir($path, $options)
     {
-        $result = false;
-
         try {
             // Retrieve the context options
             $this->setClientConfig();
@@ -593,7 +581,7 @@ class StreamWrapper
             $result   = $resource->getFilename();
 
             // Cache the resource statistics for quick url_stat lookups
-            $url = (string)$this->openedPath->combine($resource->getHref());
+            $url = (string)Url::factory($this->openedPath)->combine($resource->getHref());
             self::$statCache[$url] = $resource->getStat();
 
             $this->iterator->next();
@@ -766,8 +754,6 @@ class StreamWrapper
      */
     protected function releaseLock()
     {
-        $result = false;
-
         try {
             $result = self::$client->releaseLock($this->openedPath, $this->locktoken);
             $this->locktoken = null;
@@ -808,7 +794,7 @@ class StreamWrapper
 
         } catch (NoSuchResourceException $exception) {
             // The resource does not exist, so use a simple write stream
-            return $this->openWriteOnly($path);
+            return $this->openWriteOnly($url);
         }
 
         return true;
@@ -871,10 +857,10 @@ class StreamWrapper
      * Trigger an error
      *
      * @param \Exception|string $error Error to trigger
-     * @param int               $quiet If set to true, then no error or exception occurs
+     * @param bool|int          $quiet If set to true, then no error or exception occurs
      *
+     * @throws Exception\StreamException
      * @return bool Returns false
-     * @throws StreamException if throw_exceptions is true
      */
     protected function triggerError($error, $quiet = false)
     {

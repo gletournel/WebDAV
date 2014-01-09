@@ -21,6 +21,9 @@ class PropertySetTest extends \PHPUnit_Framework_TestCase
         'D:getcontenttype'
     );
 
+    /**
+     * @var PropertySet
+     */
     protected $props;
 
     public function setUp()
@@ -58,7 +61,10 @@ class PropertySetTest extends \PHPUnit_Framework_TestCase
     public function testOffsetUnset()
     {
         unset($this->props['R:bigbox']);
-        $this->assertFalse(isset($this->props['R:bigbox']), 'Unable to assert that R:bigbox property has been deleted!');
+        $this->assertFalse(
+            isset($this->props['R:bigbox']),
+            'Unable to assert that R:bigbox property has been deleted!'
+        );
     }
 
     /** Testing Countable **/

@@ -104,7 +104,7 @@ class PropertySet implements \IteratorAggregate, \ArrayAccess, \Countable
     /**
      * Returns an iterator over all properties in this set.
      *
-     * @return Iterator An iterator over {@link PropertyInterface}
+     * @return \Iterator An iterator over {@link PropertyInterface}
      */
     public function getIterator()
     {

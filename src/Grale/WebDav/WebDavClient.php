@@ -18,10 +18,8 @@ use Guzzle\Http\Message\RequestInterface as HttpRequest;
 use Guzzle\Http\Exception\BadResponseException;
 use Guzzle\Stream\PhpStreamRequestFactory;
 use Grale\WebDav\Exception\NoSuchResourceException;
-use Grale\WebDav\Exception\AccessDeniedException;
 use Grale\WebDav\Exception\HttpException;
 use Grale\WebDav\Header\TimeoutHeader;
-use Grale\WebDav\Header\DepthHeader;
 
 /**
  * WebDAV client
@@ -30,7 +28,7 @@ use Grale\WebDav\Header\DepthHeader;
  *
  * @todo implement the PROPATCH method
  */
-class Client
+class WebDavClient
 {
     /**
      * @var HttpClient
@@ -602,8 +600,9 @@ class Client
      *
      * @param HttpRequest $request The request
      *
+     * @throws Exception\NoSuchResourceException
+     * @throws Exception\HttpException
      * @return HttpResponse Returns the server response
-     * @throws HttpException If an HTTP error is returned
      */
     protected function doRequest(HttpRequest $request)
     {
