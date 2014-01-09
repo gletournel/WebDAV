@@ -10,6 +10,7 @@
 
 namespace Grale\WebDav;
 
+use Guzzle\Http\Message\Request;
 use Guzzle\Http\Message\Response;
 use Guzzle\Http\Message\RequestFactory;
 use Guzzle\Http\Exception\BadResponseException;
@@ -257,7 +258,8 @@ class ClientTest extends \PHPUnit_Framework_TestCase
         $this->assertContains('Destination: http://www.foo.bar/othercontainer/', $request);
         $this->assertContains(
             'If: (<opaquelocktoken:fe184f2e-6eec-41d0-c765-01adc56e6bb4>)' .
-               ' (<opaquelocktoken:e454f3f3-acdc-452a-56c7-00a5c91e4b77>)', $request
+            ' (<opaquelocktoken:e454f3f3-acdc-452a-56c7-00a5c91e4b77>)',
+            $request
         );
     }
 
@@ -468,7 +470,6 @@ class ClientTest extends \PHPUnit_Framework_TestCase
             'timeout' => 4100000000
         ));
 
-        $status  = $client->getLastResponseStatus();
         $request = $client->getLastRequest();
 
         $this->assertInstanceOf('Grale\\WebDav\\Lock', $lock);
@@ -506,7 +507,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
             'opaquelocktoken:e71d4fae-5dec-22d6-fea5-00a0c91e6be4',
             4100000000
         );
-        $status  = $client->getLastResponseStatus();
+
         $request = $client->getLastRequest();
 
         $this->assertInstanceOf('Grale\\WebDav\\Lock', $result);
@@ -592,6 +593,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      * @param  string $name
      * @param  bool   $asString
      *
+     * @throws \RuntimeException
      * @return Request|Response
      */
     protected function getFixture($name, $asString = false)

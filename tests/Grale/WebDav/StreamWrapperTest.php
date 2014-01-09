@@ -17,6 +17,9 @@ use Guzzle\Http\EntityBody;
  */
 class StreamWrapperTest extends \PHPUnit_Framework_TestCase
 {
+    /**
+     * @var \PHPUnit_Framework_MockObject_MockObject
+     */
     protected $client;
 
     public function setUp()
@@ -29,7 +32,10 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
         $stream = EntityBody::fromString('Hello World!');
         $wdavClient->expects($this->any())->method('getStream')->will($this->returnValue($stream));
 
-        $propfind = MultiStatus::parse($wdavClient, file_get_contents(__DIR__ . '/../../fixtures/streamwrapper.opendir.xml'));
+        $propfind = MultiStatus::parse(
+            $wdavClient,
+            file_get_contents(__DIR__ . '/../../fixtures/streamwrapper.opendir.xml')
+        );
 
         $wdavClient->expects($this->any())->method('setThrowExceptions')->will($this->returnValue($this->client));
         $wdavClient->expects($this->any())->method('propfind')->will($this->returnValue($propfind));
@@ -82,12 +88,12 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
 
     /**
      * @dataProvider getUnsupportedModes
-     * @expectedException PHPUnit_Framework_Error_Warning
+     * @expectedException \PHPUnit_Framework_Error_Warning
      * @expectedExceptionMessage failed to open stream
      */
     public function testStreamOpenWithUnsupportedModeTriggersError($mode)
     {
-        $result = fopen('webdav://test', $mode);
+        fopen('webdav://test', $mode);
     }
 
     public function getUnsupportedModes()
@@ -205,7 +211,7 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-     * @expectedException PHPUnit_Framework_Error_Warning
+     * @expectedException \PHPUnit_Framework_Error_Warning
      * @expectedExceptionMessage WebDAV stream wrapper does not allow to create directories recursively
      */
     public function testMakeDirectoryRecursively()
@@ -280,7 +286,7 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
                      )
                      ->will($this->returnValue($lock));
 
-        $result = flock($fd, LOCK_EX);
+        flock($fd, LOCK_EX);
         $result = flock($fd, LOCK_EX);
 
         $this->assertTrue($result);
@@ -322,17 +328,5 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
     {
         $result = is_dir('webdav://www.foo.bar/container');
         $this->assertTrue($result);
-    }
-
-    public function testIsDirWithCache()
-    {
-        $dir = dir('webdav://www.foo.bar/container');
-
-        $files = array();
-        while (($file = $dir->read()) !== false) {
-            $files[] = $file;
-        }
-
-        $result = is_dir('webdav://www.foo.bar/container/othercontainer');
     }
 }

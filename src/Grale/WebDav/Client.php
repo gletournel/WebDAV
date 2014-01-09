@@ -600,8 +600,9 @@ class Client
      *
      * @param HttpRequest $request The request
      *
+     * @throws Exception\NoSuchResourceException
+     * @throws Exception\HttpException
      * @return HttpResponse Returns the server response
-     * @throws HttpException If an HTTP error is returned
      */
     protected function doRequest(HttpRequest $request)
     {

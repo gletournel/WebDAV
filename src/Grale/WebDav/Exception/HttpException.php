@@ -89,23 +89,26 @@ abstract class HttpException extends \RuntimeException
 
         if ($response->isClientError()) {
             $class = __NAMESPACE__ . '\\ClientFailureException';
-        } elseif ($response->isServerError()) {
+        } else {
             $class = __NAMESPACE__ . '\\ServerFailureException';
         }
 
-        $statusCode = $response->getStatusCode();
-        $httpMethod = $request->getMethod();
+        $exception = new $class($response->getReasonPhrase(), null, $cause);
 
-        $e = new $class($response->getReasonPhrase(), null, $cause);
-        $e->setStatusCode($statusCode);
-        $e->setResponse($response);
-        $e->setRequest($request);
+        if ($exception instanceof HttpException) {
+            $statusCode = $response->getStatusCode();
+            $httpMethod = $request->getMethod();
 
-        if (isset(self::$descriptionMapping[$httpMethod][$statusCode])) {
-            $e->setDescription(self::$descriptionMapping[$httpMethod][$statusCode]);
+            $exception->setStatusCode($statusCode);
+            $exception->setResponse($response);
+            $exception->setRequest($request);
+
+            if (isset(self::$descriptionMapping[$httpMethod][$statusCode])) {
+                $exception->setDescription(self::$descriptionMapping[$httpMethod][$statusCode]);
+            }
         }
 
-        return $e;
+        return $exception;
     }
 
     /**
