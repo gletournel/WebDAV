@@ -28,7 +28,7 @@ use Grale\WebDav\Header\TimeoutHeader;
  *
  * @todo implement the PROPATCH method
  */
-class Client
+class WebDavClient
 {
     /**
      * @var HttpClient

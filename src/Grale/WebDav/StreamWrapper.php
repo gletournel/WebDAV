@@ -70,7 +70,7 @@ class StreamWrapper
     protected $locktoken;
 
     /**
-     * @var Client WebDAV client used to send requests
+     * @var WebDavClient WebDAV client used to send requests
      */
     protected static $client;
 
@@ -94,12 +94,12 @@ class StreamWrapper
 
     /**
      * @param array  $options An associative array of default stream context options
-     * @param Client $client  WebDAV Client to use with the stream wrapper
+     * @param WebDavClient $client  WebDAV Client to use with the stream wrapper
      *
      * @return bool Returns true on success or false on failure
      * @throws \RuntimeException If a stream wrapper has already been registered
      */
-    public static function register(array $options = null, Client $client = null)
+    public static function register(array $options = null, WebDavClient $client = null)
     {
         $result = true;
 
@@ -144,11 +144,11 @@ class StreamWrapper
     }
 
     /**
-     * @return Client Returns the default WebDAV Client to use with the stream wrapper
+     * @return WebDavClient Returns the default WebDAV Client to use with the stream wrapper
      */
     public static function getDefaultClient()
     {
-        return new Client();
+        return new WebDavClient();
     }
 
     // @codingStandardsIgnoreStart
