@@ -18,17 +18,17 @@ use Guzzle\Http\Exception\BadResponseException;
 /**
  * @covers Grale\WebDav\Client
  */
-class ClientTest extends \PHPUnit_Framework_TestCase
+class WebDavClientTest extends \PHPUnit_Framework_TestCase
 {
     public function testBaseUrl()
     {
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $this->assertEquals('http://www.foo.bar', $client->getBaseUrl());
     }
 
     public function testConfig()
     {
-        $client = new Client('', array(
+        $client = new WebDavClient('', array(
             'base_url' => 'http://www.foo.bar',
             'auth' => array('user', 'pass', 'Basic'),
             'user_agent' => 'my/custom/agent'
@@ -55,7 +55,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
             'Dav' => '1, 2, <http://apache.org/dav/propset/fs/1>'
         ));
 
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock($response));
 
         $result = $client->getComplianceClasses();
@@ -69,7 +69,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
             'Allow' => 'GET, POST, MKCOL, PROPFIND'
         ));
 
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock($response));
 
         $result = $client->getSupportedMethods();
@@ -83,7 +83,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
 
     public function testExists()
     {
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock(new Response(200)));
 
         $this->assertTrue($client->exists('/resource'));
@@ -91,7 +91,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
 
     public function testNotExist()
     {
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock(new Response(404)));
 
         $this->assertFalse($client->exists('/resource'));
@@ -103,7 +103,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
 
     public function testPutWithLockToken()
     {
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock(new Response(201)));
 
         $client->put('resource', 'Hello World', array(
@@ -116,14 +116,14 @@ class ClientTest extends \PHPUnit_Framework_TestCase
 
     public function testPutSuccessfully()
     {
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock(new Response(201)));
         $this->assertTrue($client->put('resource', 'data'));
     }
 
     public function testPutFailed()
     {
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock(new Response(423)));
         $this->assertFalse($client->put('resource', 'data'));
     }
@@ -134,7 +134,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
 
     public function testDeleteSuccessfully()
     {
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock(new Response(204)));
 
         $result = $client->delete('/container/');
@@ -149,7 +149,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testDeleteLockedResourceWithFailure()
     {
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.delete-failed')));
 
         $result = $client->delete('/container/');
@@ -165,7 +165,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
 
     public function testMkcol()
     {
-        $client = new Client('http://www.server.org');
+        $client = new WebDavClient('http://www.server.org');
         $client->setHttpClient($this->getHttpClientMock(new Response(201)));
 
         $result = $client->mkcol('/webdisc/xfiles');
@@ -186,7 +186,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
     {
         $this->setExpectedException(__NAMESPACE__ . '\\' . $class, $message);
 
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock(new Response($status)));
         $client->setThrowExceptions();
         $client->mkcol('/resource');
@@ -214,7 +214,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
     {
         $response = new Response(201, array('Location' => 'http://www.ics.uci.edu/users/f/fielding/index.html'));
 
-        $client = new Client('http://www.ics.uci.edu');
+        $client = new WebDavClient('http://www.ics.uci.edu');
         $client->setHttpClient($this->getHttpClientMock($response));
 
         $result  = $client->move('/~fielding/index.html', '/users/f/fielding/index.html');
@@ -236,7 +236,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testMoveLockedCollection()
     {
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.move-locked-collection')));
 
         $result  = $client->move('/container/', '/othercontainer/', array(
@@ -274,7 +274,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
     {
         $this->setExpectedException(__NAMESPACE__ . '\\' . $class, $message);
 
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock(new Response($status)));
         $client->setThrowExceptions();
         $client->move('/source', '/destination');
@@ -300,7 +300,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testCopyWithOverwrite()
     {
-        $client = new Client('http://www.ics.uci.edu');
+        $client = new WebDavClient('http://www.ics.uci.edu');
         $client->setHttpClient($this->getHttpClientMock(new Response(204)));
 
         $result  = $client->copy('/~fielding/index.html', '/users/f/fielding/index.html');
@@ -320,7 +320,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testCopyWithNoOverwrite()
     {
-        $client = new Client('http://www.ics.uci.edu');
+        $client = new WebDavClient('http://www.ics.uci.edu');
         $client->setHttpClient($this->getHttpClientMock(new Response(412)));
 
         $result  = $client->copy('/~fielding/index.html', '/users/f/fielding/index.html', array('overwrite' => false));
@@ -340,7 +340,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testCopyCollection()
     {
-        $client = new Client('http://www.example.com');
+        $client = new WebDavClient('http://www.example.com');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.copy-collection')));
 
         $result  = $client->copy('/container/', '/othercontainer/', array('recursive' => true));
@@ -366,7 +366,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
     {
         $this->setExpectedException(__NAMESPACE__ . '\\' . $class, $message);
 
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock(new Response($status)));
         $client->setThrowExceptions();
         $client->copy('/container', '/othercontainer');
@@ -393,7 +393,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testPropfindRetrievingNamedProperties()
     {
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.propfind-named-props')));
 
         $client->xmlNamespaces['http://www.foo.bar/boxschema/'] = 'R';
@@ -432,7 +432,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testPropfindUsingAllprop()
     {
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.propfind-allprop')));
 
         $result  = $client->propfind('/container/', array('depth' => 1));
@@ -461,7 +461,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testSimpleLockRequest()
     {
-        $client = new Client('http://webdav.sb.aol.com');
+        $client = new WebDavClient('http://webdav.sb.aol.com');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.simple-lock')));
 
         $lock = $client->createLock('/workspace/webdav/proposal.doc', array(
@@ -499,7 +499,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testRefreshingWriteLock()
     {
-        $client = new Client('http://webdav.sb.aol.com');
+        $client = new WebDavClient('http://webdav.sb.aol.com');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.refreshing-write-lock')));
 
         $result = $client->refreshLock(
@@ -527,7 +527,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testMultiResourceLockRequest()
     {
-        $client = new Client('http://webdav.sb.aol.com');
+        $client = new WebDavClient('http://webdav.sb.aol.com');
         $client->setHttpClient($this->getHttpClientMock($this->getFixture('response.multi-resource-lock')));
 
         $client->createLock('/webdav/', array(
@@ -548,7 +548,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
     {
         $this->setExpectedException(__NAMESPACE__ . '\\' . $class, $message);
 
-        $client = new Client('http://www.foo.bar');
+        $client = new WebDavClient('http://www.foo.bar');
         $client->setHttpClient($this->getHttpClientMock(new Response($status)));
         $client->setThrowExceptions();
         $client->createLock('/resource');
@@ -571,7 +571,7 @@ class ClientTest extends \PHPUnit_Framework_TestCase
      */
     public function testUnlock()
     {
-        $client = new Client('http://webdav.sb.aol.com');
+        $client = new WebDavClient('http://webdav.sb.aol.com');
         $client->setHttpClient($this->getHttpClientMock(new Response(204)));
 
         $result = $client->releaseLock(

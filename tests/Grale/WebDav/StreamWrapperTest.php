@@ -25,7 +25,7 @@ class StreamWrapperTest extends \PHPUnit_Framework_TestCase
     public function setUp()
     {
         $httpClient = $this->getMockBuilder('\Guzzle\Http\Client')->getMock();
-        $wdavClient = $this->getMockBuilder('\Grale\WebDav\Client')->getMock();
+        $wdavClient = $this->getMockBuilder('\Grale\WebDav\WebDavClient')->getMock();
 
         $wdavClient->expects($this->any())->method('getHttpClient')->will($this->returnValue($httpClient));
 

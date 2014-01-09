@@ -84,7 +84,7 @@ class MultiStatus implements \IteratorAggregate, \Countable
     }
 
     /**
-     * @param Client $client
+     * @param WebDavClient $client
      * @param string $xml The multi-status response as an XML string
      *
      * @throws \RuntimeException
@@ -95,7 +95,7 @@ class MultiStatus implements \IteratorAggregate, \Countable
      * - register namespaces automatically with the Xpath object
      * - testing DOMDocument::loadXML throwing DOMException with the libxml settings and an erroneous XML document
      */
-    public static function parse(Client $client, $xml)
+    public static function parse(WebDavClient $client, $xml)
     {
         $xml = preg_replace('/\s*[\r\n]\s*/', null, $xml);
 
