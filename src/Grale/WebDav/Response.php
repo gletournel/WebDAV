@@ -48,7 +48,7 @@ class Response
     protected $status;
 
     /**
-     * @var array A list of resource properties, grouped by HTTP status code
+     * @var PropertySet[] A list of resource properties, grouped by HTTP status code
      */
     protected $properties = array();
 
