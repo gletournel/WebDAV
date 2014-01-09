@@ -18,10 +18,8 @@ use Guzzle\Http\Message\RequestInterface as HttpRequest;
 use Guzzle\Http\Exception\BadResponseException;
 use Guzzle\Stream\PhpStreamRequestFactory;
 use Grale\WebDav\Exception\NoSuchResourceException;
-use Grale\WebDav\Exception\AccessDeniedException;
 use Grale\WebDav\Exception\HttpException;
 use Grale\WebDav\Header\TimeoutHeader;
-use Grale\WebDav\Header\DepthHeader;
 
 /**
  * WebDAV client

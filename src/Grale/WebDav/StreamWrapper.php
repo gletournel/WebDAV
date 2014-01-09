@@ -10,9 +10,7 @@
 
 namespace Grale\WebDav;
 
-use Grale\WebDav\Exception\HttpException;
 use Grale\WebDav\Exception\StreamException;
-use Grale\WebDav\Exception\AccessDeniedException;
 use Grale\WebDav\Exception\NoSuchResourceException;
 use Guzzle\Http\EntityBody;
 use Guzzle\Http\Url;

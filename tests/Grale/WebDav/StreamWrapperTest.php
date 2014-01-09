@@ -10,7 +10,6 @@
 
 namespace Grale\WebDav;
 
-use Guzzle\Http\Message\RequestFactory;
 use Guzzle\Http\EntityBody;
 
 /**

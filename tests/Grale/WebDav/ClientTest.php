@@ -10,7 +10,6 @@
 
 namespace Grale\WebDav;
 
-use Grale\WebDav\Header\DepthHeader;
 use Guzzle\Http\Message\Response;
 use Guzzle\Http\Message\RequestFactory;
 use Guzzle\Http\Exception\BadResponseException;
