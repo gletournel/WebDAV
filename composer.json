@@ -5,6 +5,7 @@
     "homepage": "https://github.com/gletournel/WebDAV",
     "type": "library",
     "license": "MIT",
+    "minimum-stability": "dev",
     "authors": [
         {
             "name": "Geoffroy Letournel",
@@ -17,8 +18,8 @@
         "psr/log": "~1.0"
     },
     "require-dev": {
-        "apigen/apigen": "2.8.0",
-        "phpunit/phpunit": "~3.7.0"
+        "phpunit/phpunit": "~3.7.0",
+        "apigen/apigen": "~2.8"
     },
     "suggest": {
         "monolog/monolog": "Adds support for logging HTTP requests and responses",
