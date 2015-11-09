@@ -1,5 +1,7 @@
 # Change log
 
+## [0.2.2] - 2015-11-XX
+
 ## [0.2.1] 
 ### Added
 - This change log file.
