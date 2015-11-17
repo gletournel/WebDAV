@@ -7,8 +7,10 @@
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
-
 namespace Grale\WebDav\Header;
+
+use Grale\WebDav\Header\TimeoutValue\TimeoutValueFactory;
+use Grale\WebDav\Header\TimeoutValue\TimeoutValueInterface;
 
 /**
  * A <tt>Timeout</tt> header
@@ -17,26 +19,39 @@ namespace Grale\WebDav\Header;
  */
 class TimeoutHeader
 {
+
     /**
      * Infinite timeout
      */
-    const INFINITE = -1;
+    const INFINITE = - 1;
 
     /**
+     *
      * @var int Number of seconds
      */
     protected $seconds;
 
     /**
-     * @param int $timeout Timeout in seconds
+     *
+     * @var TimeoutValueInterface
+     */
+    private $value;
+
+    /**
+     *
+     * @param int $timeout
+     *            Timeout in seconds
      */
     public function __construct($timeout)
     {
-        $this->seconds = intval($timeout);
+        $value = TimeoutValueFactory::createFromValue($timeout);
+        $this->value = $value;
+        $this->seconds = (string) $timeout;
     }
 
     /**
      * Get the timeout in seconds.
+     *
      * @return int Returns the timeout in seconds
      */
     public function getSeconds()
@@ -47,8 +62,9 @@ class TimeoutHeader
     /**
      * Get the validity date.
      *
-     * @param int $time Timestamp when the validity date must be calculated from (Defaults to current timestamp)
-     *
+     * @param int $time
+     *            Timestamp when the validity date must be calculated from (Defaults to current timestamp)
+     *            
      * @return int Returns the validity date as a UNIX timestamp
      */
     public function getValidity($time = null)
@@ -58,8 +74,8 @@ class TimeoutHeader
             $time = time();
         }
         // @codeCoverageIgnoreEnd
-
-        return $this->seconds >= 0 ? $time + $this->seconds : self::INFINITE;
+        
+        return $this->seconds >= 0 ? $this->value->getValidity($time) : self::INFINITE;
     }
 
     /**
@@ -73,18 +89,19 @@ class TimeoutHeader
     public function __toString()
     {
         $header = null;
-
-        if ($this->seconds > self::INFINITE) {
-            $header = sprintf('Second-%d', $this->seconds);
+        
+        if (! $this->value->isInfinite()) {
+            $header = sprintf('Second-%s', $this->value->__toString());
         } else {
             $header = 'Infinite';
         }
-
+        
         return $header;
     }
 
     /**
      * Get the infinite timeout.
+     *
      * @return self Returns the infinite timeout
      */
     public static function getInfinite()
@@ -95,13 +112,14 @@ class TimeoutHeader
     /**
      * Parses the string provided as a timeout.
      *
-     * @param string $str Timeout as a string
+     * @param string $str
+     *            Timeout as a string
      * @return self Returns the parsed timeout
      */
     public static function parse($str)
     {
         $header = null;
-
+        
         if (strtolower($str) == 'infinite') {
             $header = self::getInfinite();
         } elseif (strtolower(substr($str, 0, 7)) == 'second-' && ctype_digit(substr($str, 7))) {
@@ -109,7 +127,7 @@ class TimeoutHeader
         } elseif (is_numeric($str)) {
             $header = new static($str);
         }
-
+        
         return $header;
     }
 }
