@@ -1,6 +1,8 @@
 # Change log
 
-## [0.2.2] - 2015-11-XX
+## [0.2.2] - 2015-11-24
+### Fixed
+- Logic in Factory for Timeout values. Test for GMPValue object skipped if gmp extention not avilable. 
 
 ## [0.2.1] 
 ### Added
