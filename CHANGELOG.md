@@ -1,5 +1,9 @@
 # Change log
 
+## [0.2.3] - 2015-11-25
+### Added
+- Travis integration file. 
+
 ## [0.2.2] - 2015-11-24
 ### Fixed
 - Logic in Factory for Timeout values. Test for GMPValue object skipped if gmp extention not avilable. 
